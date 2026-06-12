@@ -111,22 +111,22 @@
 
 ## Phase 3: HTTP-слой (Gin Handlers)
 
-- [ ] **3.1** Базовая настройка Gin-сервера
+- [x] **3.1** Базовая настройка Gin-сервера
   - `internal/handler/router.go` — создание роутера
   - Middleware: logger, recovery, request-id
 
-- [ ] **3.2** Хендлер `GET /api/v1/minerals`
+- [x] **3.2** Хендлер `GET /api/v1/minerals`
   - Парсинг query-параметров (`lang`, `view`, `rarity`, `hardness_min`, `russian_only`, `limit`, `page`, `sort`)
   - Вызов репозитория
   - Формирование ответа с учётом `view` (убирать esoteric при `normal`)
   - Пагинация в ответе
 
-- [ ] **3.3** Хендлер `GET /api/v1/minerals/{slug}`
+- [x] **3.3** Хендлер `GET /api/v1/minerals/{slug}`
   - Получение одной карточки
   - Корректная обработка `lang` и `view`
   - 404 при отсутствии
 
-- [ ] **3.4** Стандартизация ошибок
+- [x] **3.4** Стандартизация ошибок
   - Создать `internal/handler/error.go` с единым форматом ошибок
   - Обработка `mineral_not_found`, валидационных ошибок и т.д.
 
