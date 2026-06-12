@@ -87,7 +87,7 @@
 
 ## Phase 2: База данных и Postgres-реализация
 
-- [ ] **2.1** Настройка миграций (golang-migrate)
+- [x] **2.1** Настройка миграций (golang-migrate)
   - Создать папку `migrations/`
   - Первая миграция: создание таблицы `minerals` (id, slug, scientific jsonb, i18n jsonb, main_image_url, safety_notes, created_at, updated_at и т.д.)
   - Добавить `Makefile` цели `migrate-up` / `migrate-down`
