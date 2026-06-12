@@ -47,7 +47,7 @@
   - Добавить slog-логирование
   - Протестировать: `go run cmd/server/main.go` + curl
 
-- [ ] **0.3** Настройка зависимостей и инструментов
+- [x] **0.3** Настройка зависимостей и инструментов
   - Добавить в Makefile цели: `build`, `test`, `migrate-up`, `seed`
   - Установить `golang-migrate`, `swag`
   - Обновить `.env.example` (DB_URL, PORT, etc.)
