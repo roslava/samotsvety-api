@@ -97,13 +97,13 @@
   - Функция подключения к БД (`sqlx`)
   - Healthcheck для БД
 
-- [ ] **2.3** Реализовать `PostgresMineralRepository`
+- [x] **2.3** Реализовать `PostgresMineralRepository`
   - Файл `internal/repository/postgres_mineral_repository.go`
   - Реализовать все методы интерфейса `MineralRepository`
   - Использовать `sqlx` + JSONB
   - Поддерживать те же фильтры, что и in-memory версия
 
-- [ ] **2.4** Тесты Postgres-репозитория (опционально на старте)
+- [x] **2.4** Тесты Postgres-репозитория (опционально на старте)
   - Можно использовать те же тесты, что и для memory, подключая тестовую БД (Testcontainers или docker-compose)
   - Или пока пропустить и тестировать через API-хендлеры
 
