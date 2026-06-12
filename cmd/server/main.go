@@ -1,70 +1,79 @@
 package main
 
 import (
-"context"
-"log/slog"
-"net/http"
-"os"
-"os/signal"
-"syscall"
-"time"
+	"context"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-"github.com/gin-gonic/gin"
-"github.com/joho/godotenv"
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
+
+	"github.com/roslava/samotsvety-api/internal/config"
+	"github.com/roslava/samotsvety-api/internal/handler"
+	"github.com/roslava/samotsvety-api/internal/repository"
 )
 
 func main() {
-// Загружаем .env
-if err := godotenv.Load(); err != nil {
-slog.Warn("No .env file found, using system environment")
-}
+	// Загружаем .env
+	if err := godotenv.Load(); err != nil {
+		slog.Warn("No .env file found, using system environment")
+	}
 
-// Конфигурация
-port := os.Getenv("APP_PORT")
-if port == "" {
-port = "8080"
-}
+	// Конфигурация
+	cfg := config.LoadConfig()
 
-// Настройка Gin
-gin.SetMode(gin.DebugMode)
-router := gin.Default()
+	// Подключение к PostgreSQL
+	db, err := config.ConnectDB(context.Background(), cfg.Database)
+	if err != nil {
+		slog.Error("Failed to connect to database", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
 
-// Healthcheck
-router.GET("/health", func(c *gin.Context) {
-c.JSON(http.StatusOK, gin.H{
-"status":  "ok",
-"service": "samotsvety-api",
-"version": "0.1.0",
-})
-})
+	// Создаём репозиторий
+	mineralRepo := repository.NewPostgresMineralRepository(db)
 
-// Запуск сервера
-srv := &http.Server{
-Addr:    ":" + port,
-Handler: router,
-}
+	// Настройка Gin
+	if cfg.AppEnv == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	} else {
+		gin.SetMode(gin.DebugMode)
+	}
 
-// Graceful shutdown
-go func() {
-slog.Info("Server starting", "port", port)
-if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-slog.Error("Server failed", "error", err)
-}
-}()
+	// Создаём роутер через handler
+	router := handler.NewRouter(mineralRepo)
 
-// Ожидание сигнала завершения
-quit := make(chan os.Signal, 1)
-signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-<-quit
+	// HTTP-сервер
+	srv := &http.Server{
+		Addr:    ":" + cfg.AppPort,
+		Handler: router,
+	}
 
-slog.Info("Shutting down server...")
+	// Запуск сервера
+	go func() {
+		slog.Info("Server starting", "port", cfg.AppPort, "env", cfg.AppEnv)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("Server failed", "error", err)
+		}
+	}()
 
-ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-defer cancel()
+	// Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
 
-if err := srv.Shutdown(ctx); err != nil {
-slog.Error("Server forced to shutdown", "error", err)
-}
+	slog.Info("Shutting down server...")
 
-slog.Info("Server exited")
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("Server forced to shutdown", "error", err)
+	}
+
+	slog.Info("Server exited")
 }
