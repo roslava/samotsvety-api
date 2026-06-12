@@ -1,0 +1,55 @@
+{
+  "slug": "malachite",
+  "scientific": {
+    "chemical_formula": "Cu₂CO₃(OH)₂",
+    "mineral_group": "карбонаты",
+    "crystal_system": "моноклинная",
+    "crystal_habit": "почковидный, волокнистый, радиально-лучистый",
+    "hardness": {
+      "min": 3.5,
+      "max": 4.0
+    },
+    "specific_gravity": {
+      "min": 3.6,
+      "max": 4.05
+    },
+    "streak": "светло-зелёная",
+    "luster": "стеклянный, шелковистый",
+    "transparency": "непрозрачный",
+    "cleavage": "совершенная",
+    "fracture": "раковистый",
+    "rarity": "common",
+    "identification_tips": "Характерный ярко-зелёный цвет с концентрическими полосами"
+  },
+  "i18n": {
+    "ru": {
+      "name": "Малахит",
+      "synonyms": ["медная зелень", "малахитовая руда"],
+      "color": ["зелёный", "тёмно-зелёный"],
+      "color_description": "Ярко-зелёный с характерным концентрическим рисунком",
+      "lore": "Один из самых известных уральских самоцветов. Добывался в огромных количествах на Меднорудянском и Гумешевском месторождениях. Использовался для создания ваз, столешниц и предметов декора в эпоху Демидовых.",
+      "esoteric": {
+        "metaphysical_properties": ["защита", "эмоциональное исцеление", "трансформация", "гармония"],
+        "chakras": ["сердечная чакра"],
+        "zodiac": ["Телец", "Весы", "Козерог"]
+      }
+    },
+    "en": {
+      "name": "Malachite",
+      "synonyms": ["copper green"],
+      "color": ["green", "dark green"],
+      "color_description": "Vibrant green with concentric banding",
+      "lore": "One of the most famous Ural gemstones. Mined in large quantities at Mednorudyanskoye and Gumyoshki deposits. Widely used for vases, tabletops and decorative items during the Demidov era.",
+      "esoteric": {
+        "metaphysical_properties": ["protection", "emotional healing", "transformation", "harmony"],
+        "chakras": ["heart chakra"],
+        "zodiac": ["Taurus", "Libra", "Capricorn"]
+      }
+    }
+  },
+  "main_image_url": "https://example.com/images/malachite-hero.jpg",
+  "safety_notes": "Содержит медь. Не рекомендуется длительный контакт с кожей в сыром виде и использование в воде для питья.",
+  "localities": [],
+  "gallery": [],
+  "related_minerals": ["azurite", "chrysocolla"]
+}

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -35,16 +36,20 @@ func NewMineralHandler(repo repository.MineralRepository) *MineralHandler {
 // @Router       /api/v1/minerals [get]
 func (h *MineralHandler) ListMinerals(c *gin.Context) {
 	var filters domain.FilterParams
-
 	if err := c.ShouldBindQuery(&filters); err != nil {
-		RespondBadRequest(c, "Invalid query parameters")
+		RespondBadRequest(c, err.Error())
 		return
 	}
 
 	minerals, total, err := h.repo.List(c.Request.Context(), filters)
 	if err != nil {
-		RespondInternalError(c, "Failed to get minerals")
+		slog.Error("Failed to list minerals", "error", err)
+		RespondInternalError(c, "Failed to fetch minerals")
 		return
+	}
+
+	if minerals == nil {
+		minerals = []domain.Mineral{}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
