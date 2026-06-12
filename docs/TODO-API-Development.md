@@ -63,7 +63,7 @@
   - Добавить json-теги точно по спецификации
   - Добавить валидационные теги где уместно
 
-- [ ] **1.2** Создать интерфейс репозитория `internal/repository/mineral_repository.go`
+- [x] **1.2** Создать интерфейс репозитория `internal/repository/mineral_repository.go`
   - `MineralRepository` интерфейс:
     - `GetBySlug(ctx, slug, lang, view string) (*Mineral, error)`
     - `List(ctx, filters FilterParams) ([]Mineral, int, error)` — с пагинацией и total
@@ -71,13 +71,13 @@
     - `GetFilters(...)` (для эндпоинта /filters)
   - Определить структуру `FilterParams`
 
-- [ ] **1.3** Реализовать **In-Memory** репозиторий
+- [x] **1.3** Реализовать **In-Memory** репозиторий
   - Файл `internal/repository/memory_mineral_repository.go`
   - Хранить данные в `map[string]*Mineral` или срезе
   - Реализовать все методы интерфейса
   - Поддержка фильтрации по `lang`, `view`, `rarity`, `russian_only`, `hardness_min/max`
 
-- [ ] **1.4** Написать тесты для In-Memory репозитория
+- [x] **1.4** Написать тесты для In-Memory репозитория
   - Файл `internal/repository/memory_mineral_repository_test.go`
   - Table-driven тесты на `GetBySlug` и `List` с разными комбинациями фильтров
   - Тесты на поведение `view=normal` vs `view=esoteric` (esoteric должен отсутствовать)
