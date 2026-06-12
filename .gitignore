@@ -1,0 +1,32 @@
+# Environment variables
+.env
+.env.local
+
+# Build artifacts
+bin/
+dist/
+*.o
+*.a
+*.so
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+coverage.out
+*.test
+
+# Database
+*.db
+*.sqlite
+
+# Logs
+*.log
+
+# Dependencies (Go modules are cached locally)
+vendor/

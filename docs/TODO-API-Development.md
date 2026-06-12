@@ -92,7 +92,7 @@
   - Первая миграция: создание таблицы `minerals` (id, slug, scientific jsonb, i18n jsonb, main_image_url, safety_notes, created_at, updated_at и т.д.)
   - Добавить `Makefile` цели `migrate-up` / `migrate-down`
 
-- [ ] **2.2** Конфигурация подключения к PostgreSQL
+- [x] **2.2** Конфигурация подключения к PostgreSQL
   - `internal/config/config.go` (чтение из env + godotenv)
   - Функция подключения к БД (`sqlx`)
   - Healthcheck для БД
