@@ -117,10 +117,10 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 		argIdx++
 	}
 
-	// Russian only (проверяем, есть ли хотя бы одна российская локация)
+	// Russian only (защита от null/отсутствующего поля)
 	if filters.RussianOnly {
 		conditions = append(conditions, `EXISTS (
-			SELECT 1 FROM jsonb_array_elements(localities) AS loc 
+			SELECT 1 FROM jsonb_array_elements(COALESCE(localities, '[]'::jsonb)) AS loc 
 			WHERE (loc->>'is_russian')::boolean = true
 		)`)
 	}
