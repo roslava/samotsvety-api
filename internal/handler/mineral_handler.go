@@ -41,6 +41,23 @@ func (h *MineralHandler) ListMinerals(c *gin.Context) {
 		return
 	}
 
+	// Применяем дефолтные значения здесь (до вызова репозитория)
+	if filters.Limit == 0 {
+		filters.Limit = 20
+	}
+	if filters.Page == 0 {
+		filters.Page = 1
+	}
+	if filters.Lang == "" {
+		filters.Lang = "ru"
+	}
+	if filters.View == "" {
+		filters.View = "normal"
+	}
+	if filters.Order == "" {
+		filters.Order = "desc"
+	}
+
 	minerals, total, err := h.repo.List(c.Request.Context(), filters)
 	if err != nil {
 		slog.Error("Failed to list minerals", "error", err)
