@@ -239,7 +239,7 @@ func (r *PostgresMineralRepository) applyViewFilter(mineral *domain.Mineral, vie
 	}
 }
 
-// ==================== SEARCH ====================
+// ==================== SEARCH (улучшенная версия) ====================
 func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, view string, limit, offset int) ([]domain.Mineral, int, error) {
 	if query == "" {
 		return []domain.Mineral{}, 0, nil
@@ -254,24 +254,25 @@ func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, vie
 		limit = 20
 	}
 
-	langKey := "ru"
-	if lang == "en" {
-		langKey = "en"
-	}
-
 	searchPattern := "%" + query + "%"
 
-	where := fmt.Sprintf(`
+	// Поиск сразу в обоих языках + химическая формула
+	where := `
 		(
-			i18n->'%s'->>'name' ILIKE $1 OR
-			i18n->'%s'->>'lore' ILIKE $1 OR
-			EXISTS (
-				SELECT 1 FROM jsonb_array_elements_text(i18n->'%s'->'synonyms') AS s 
-				WHERE s ILIKE $1
-			) OR
+			-- Русский
+			i18n->'ru'->>'name' ILIKE $1 OR
+			i18n->'ru'->>'lore' ILIKE $1 OR
+			EXISTS (SELECT 1 FROM jsonb_array_elements_text(i18n->'ru'->'synonyms') AS s WHERE s ILIKE $1) OR
+			
+			-- Английский
+			i18n->'en'->>'name' ILIKE $1 OR
+			i18n->'en'->>'lore' ILIKE $1 OR
+			EXISTS (SELECT 1 FROM jsonb_array_elements_text(i18n->'en'->'synonyms') AS s WHERE s ILIKE $1) OR
+			
+			-- Химическая формула
 			scientific->>'chemical_formula' ILIKE $1
 		)
-	`, langKey, langKey, langKey)
+	`
 
 	querySQL := fmt.Sprintf(`
 		SELECT slug, scientific, i18n, main_image_url, safety_notes,
