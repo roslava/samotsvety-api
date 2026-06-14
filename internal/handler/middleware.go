@@ -7,13 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ErrorResponse — стандартизированный ответ об ошибке
-type ErrorResponse struct {
-	Code    int    `json:"code" example:"404"`
-	Message string `json:"message" example:"Resource not found"`
-	Error   string `json:"error,omitempty" example:"mineral not found"`
-}
-
 // ErrorHandler — глобальный middleware для обработки ошибок
 func ErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {

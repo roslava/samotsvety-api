@@ -168,7 +168,7 @@
   - Сгенерировать `docs/` (swagger.json + UI)
   - Доступ к Swagger UI по `/swagger/index.html`
 
-- [ ] **6.2** Улучшить логирование и observability
+- [х] **6.2** Улучшить логирование и observability
   - Структурированные логи (slog)
   - Логирование запросов с request-id
   - Логирование ошибок
