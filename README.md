@@ -97,3 +97,54 @@ Docker + docker-compose
 └── README.md
 ```
 
+# Samotsvety API
+
+Современный API для цифрового атласа самоцветов и минералов.
+
+## Основные возможности
+- Полноценный CRUD для минералов
+- Двуязычность (ru/en)
+- Два режима отображения (`normal` / `esoteric`)
+- Полнотекстовый поиск и фильтры
+- Чистая архитектура (Go + Gin + PostgreSQL)
+
+## Админские операции (POST / PUT / DELETE)
+
+**Все изменяющие операции защищены API Key.**
+
+### Как использовать:
+
+1. Добавьте ключ в `.env`:
+   ```env
+   ADMIN_API_KEY=super-secret-admin-key-change-me
+
+
+
+
+
+
+   Перезапустите сервер.
+Передавайте ключ в заголовке:
+
+Bash# Пример создания
+curl -X POST http://localhost:8080/api/v1/minerals \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: super-secret-admin-key-change-me" \
+  -d @seeds/minerals/malachite.json
+
+# Пример обновления
+curl -X PUT http://localhost:8080/api/v1/minerals/malachite \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: super-secret-admin-key-change-me" \
+  -d '{"safety_notes": "Новое описание безопасности..."}'
+Важно: GET-запросы (/minerals, /minerals/{slug}, /search, /filters) — публичные.
+Запуск проекта
+Bashdocker-compose up -d          # PostgreSQL
+make migrate-up
+make seed                     # наполнение тестовыми данными
+make run                      # запуск сервера
+Полезные команды
+
+make seed — применить сиды
+make migrate-up — миграции
+make build — сборка

@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 
+	"github.com/roslava/samotsvety-api/internal/middleware"
 	"github.com/roslava/samotsvety-api/internal/repository"
 )
 
@@ -12,27 +13,32 @@ func NewRouter(repo repository.MineralRepository) *gin.Engine {
 	// Middleware
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
-	router.Use(CORS()) // ← Используем существующий middleware
+	router.Use(CORS())
 
 	mineralHandler := NewMineralHandler(repo)
 
 	// API v1
 	v1 := router.Group("/api/v1")
 	{
-		// Минералы
+		// === Минералы ===
 		minerals := v1.Group("/minerals")
 		{
+			// Публичные методы (чтение)
 			minerals.GET("", mineralHandler.ListMinerals)
 			minerals.GET("/:slug", mineralHandler.GetMineral)
-			minerals.POST("", mineralHandler.CreateMineral)
-			minerals.PUT("/:slug", mineralHandler.UpdateMineral)
-			minerals.DELETE("/:slug", mineralHandler.DeleteMineral)
+
+			// === ЗАЩИЩЁННЫЕ АДМИНСКИЕ МЕТОДЫ ===
+			admin := minerals.Group("")
+			admin.Use(middleware.APIKeyAuth())
+			{
+				admin.POST("", mineralHandler.CreateMineral)
+				admin.PUT("/:slug", mineralHandler.UpdateMineral)
+				admin.DELETE("/:slug", mineralHandler.DeleteMineral)
+			}
 		}
 
-		// Поиск
+		// Поиск и фильтры — публичные
 		v1.GET("/search", mineralHandler.SearchMinerals)
-
-		// Фильтры
 		v1.GET("/filters", mineralHandler.GetFilters)
 	}
 
