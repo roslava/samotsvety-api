@@ -175,7 +175,18 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 
 // ==================== CREATE (Phase 7) ====================
 // Create создаёт новый минерал
+// Create создаёт новый минерал с проверкой уникальности slug
 func (r *PostgresMineralRepository) Create(ctx context.Context, mineral *domain.Mineral) error {
+	// Проверка, что slug ещё не занят
+	var count int
+	err := r.db.GetContext(ctx, &count, "SELECT COUNT(*) FROM minerals WHERE slug = $1", mineral.Slug)
+	if err != nil {
+		return fmt.Errorf("failed to check slug uniqueness: %w", err)
+	}
+	if count > 0 {
+		return fmt.Errorf("slug_already_exists")
+	}
+
 	scientificJSON, _ := json.Marshal(mineral.Scientific)
 	i18nJSON, _ := json.Marshal(mineral.I18n)
 	localitiesJSON, _ := json.Marshal(mineral.Localities)
@@ -200,7 +211,7 @@ func (r *PostgresMineralRepository) Create(ctx context.Context, mineral *domain.
 		)
 	`
 
-	_, err := r.db.ExecContext(ctx, query,
+	_, err = r.db.ExecContext(ctx, query,
 		mineral.Slug,
 		scientificJSON,
 		i18nJSON,

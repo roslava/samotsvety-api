@@ -195,6 +195,7 @@ func (h *MineralHandler) GetFilters(c *gin.Context) {
 // @Param        mineral body handler.CreateMineralRequest true "Данные минерала"
 // @Success      201  {object} domain.Mineral
 // @Failure      400  {object} handler.ErrorResponse
+// @Failure      409  {object} handler.ErrorResponse "Slug уже существует"
 // @Failure      500  {object} handler.ErrorResponse
 // @Router       /api/v1/minerals [post]
 func (h *MineralHandler) CreateMineral(c *gin.Context) {
@@ -220,6 +221,10 @@ func (h *MineralHandler) CreateMineral(c *gin.Context) {
 	}
 
 	if err := h.repo.Create(c.Request.Context(), mineral); err != nil {
+		if err.Error() == "slug_already_exists" {
+			RespondWithError(c, http.StatusConflict, "Минерал с таким slug уже существует")
+			return
+		}
 		slog.Error("Failed to create mineral", "error", err, "slug", req.Slug)
 		RespondInternalError(c, "Не удалось создать минерал")
 		return

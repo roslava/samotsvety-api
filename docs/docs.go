@@ -167,6 +167,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/internal_handler.ErrorResponse"
                         }
                     },
+                    "409": {
+                        "description": "Slug уже существует",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
