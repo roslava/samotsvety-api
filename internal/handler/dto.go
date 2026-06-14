@@ -14,13 +14,14 @@ type CreateMineralRequest struct {
 	RelatedMinerals []string              `json:"related_minerals,omitempty"`
 }
 
-// UpdateMineralRequest — DTO для обновления минерала (все поля опциональны)
+// UpdateMineralRequest — DTO для обновления (все поля опциональны + поддержка slug)
 type UpdateMineralRequest struct {
-	Scientific      *domain.Scientific    `json:"scientific,omitempty"`
-	I18n            *domain.I18n          `json:"i18n,omitempty"`
-	Localities      []domain.Locality     `json:"localities,omitempty"`
-	MainImageURL    *string               `json:"main_image_url,omitempty"`
-	Gallery         []domain.GalleryImage `json:"gallery,omitempty"`
-	SafetyNotes     *string               `json:"safety_notes,omitempty"`
-	RelatedMinerals []string              `json:"related_minerals,omitempty"`
+	Slug            *string                `json:"slug,omitempty" validate:"omitempty,alphanumdash"`
+	Scientific      *domain.Scientific     `json:"scientific,omitempty"`
+	I18n            *domain.I18n           `json:"i18n,omitempty"`
+	Localities      *[]domain.Locality     `json:"localities,omitempty"` // указатель — важно!
+	MainImageURL    *string                `json:"main_image_url,omitempty"`
+	Gallery         *[]domain.GalleryImage `json:"gallery,omitempty"` // указатель
+	SafetyNotes     *string                `json:"safety_notes,omitempty"`
+	RelatedMinerals *[]string              `json:"related_minerals,omitempty"` // указатель
 }

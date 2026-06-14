@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -233,21 +234,20 @@ func (h *MineralHandler) CreateMineral(c *gin.Context) {
 	c.JSON(http.StatusCreated, mineral)
 }
 
-// UpdateMineral godoc
-// @Summary      Обновить минерал
-// @Description  Обновляет данные существующего минерала по slug (админка)
-// @Tags         minerals
-// @Accept       json
-// @Produce      json
-// @Param        slug    path    string                      true  "Slug минерала"
-// @Param        mineral body    handler.UpdateMineralRequest true  "Обновлённые данные"
-// @Success      200     {object} domain.Mineral
-// @Failure      400     {object} handler.ErrorResponse
-// @Failure      404     {object} handler.ErrorResponse
-// @Failure      500     {object} handler.ErrorResponse
-// @Router       /api/v1/minerals/{slug} [put]
+// UpdateMineral обновляет существующий минерал
+// @Summary Обновить минерал
+// @Tags minerals
+// @Accept json
+// @Produce json
+// @Param slug path string true "Slug минерала"
+// @Param mineral body handler.UpdateMineralRequest true "Данные для обновления"
+// @Success 200 {object} domain.Mineral
+// @Failure 400 {object} handler.ErrorResponse
+// @Failure 404 {object} handler.ErrorResponse
+// @Failure 409 {object} handler.ErrorResponse
+// @Router /minerals/{slug} [put]
 func (h *MineralHandler) UpdateMineral(c *gin.Context) {
-	slug := c.Param("slug")
+	oldSlug := c.Param("slug")
 
 	var req UpdateMineralRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -256,13 +256,16 @@ func (h *MineralHandler) UpdateMineral(c *gin.Context) {
 	}
 
 	// Получаем текущий минерал
-	mineral, err := h.repo.GetBySlug(c.Request.Context(), slug, "ru", "normal")
+	mineral, err := h.repo.GetBySlug(c.Request.Context(), oldSlug, "ru", "normal")
 	if err != nil {
 		RespondNotFound(c, "Минерал не найден")
 		return
 	}
 
-	// Обновляем только те поля, которые пришли в запросе
+	// Merge изменений
+	if req.Slug != nil && *req.Slug != "" {
+		mineral.Slug = *req.Slug
+	}
 	if req.Scientific != nil {
 		mineral.Scientific = *req.Scientific
 	}
@@ -270,27 +273,31 @@ func (h *MineralHandler) UpdateMineral(c *gin.Context) {
 		mineral.I18n = *req.I18n
 	}
 	if req.Localities != nil {
-		mineral.Localities = req.Localities
+		mineral.Localities = *req.Localities
 	}
 	if req.MainImageURL != nil {
 		mineral.MainImageURL = *req.MainImageURL
 	}
 	if req.Gallery != nil {
-		mineral.Gallery = req.Gallery
+		mineral.Gallery = *req.Gallery
 	}
 	if req.SafetyNotes != nil {
 		mineral.SafetyNotes = *req.SafetyNotes
 	}
 	if req.RelatedMinerals != nil {
-		mineral.RelatedMinerals = req.RelatedMinerals
+		mineral.RelatedMinerals = *req.RelatedMinerals
 	}
 
-	if err := h.repo.Update(c.Request.Context(), slug, mineral); err != nil {
-		if err.Error() == "mineral not found" {
-			RespondNotFound(c, "Минерал не найден")
+	// Обновляем время
+	mineral.UpdatedAt = time.Now().UTC()
+
+	if err := h.repo.Update(c.Request.Context(), oldSlug, mineral); err != nil {
+		if strings.Contains(err.Error(), "slug_already_exists") ||
+			strings.Contains(err.Error(), "duplicate key") {
+			RespondWithError(c, http.StatusConflict, "Минерал с таким slug уже существует")
 			return
 		}
-		slog.Error("Failed to update mineral", "error", err, "slug", slug)
+		slog.Error("Failed to update mineral", "error", err, "oldSlug", oldSlug)
 		RespondInternalError(c, "Не удалось обновить минерал")
 		return
 	}
