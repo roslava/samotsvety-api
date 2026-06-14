@@ -224,6 +224,35 @@ definitions:
           type: string
         type: array
     type: object
+  internal_handler.CreateMineralRequest:
+    properties:
+      gallery:
+        items:
+          $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.GalleryImage'
+        type: array
+      i18n:
+        $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.I18n'
+      localities:
+        items:
+          $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Locality'
+        type: array
+      main_image_url:
+        type: string
+      related_minerals:
+        items:
+          type: string
+        type: array
+      safety_notes:
+        type: string
+      scientific:
+        $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Scientific'
+      slug:
+        type: string
+    required:
+    - i18n
+    - scientific
+    - slug
+    type: object
   internal_handler.ErrorResponse:
     properties:
       code:
@@ -246,12 +275,35 @@ definitions:
       total:
         type: integer
     type: object
+  internal_handler.UpdateMineralRequest:
+    properties:
+      gallery:
+        items:
+          $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.GalleryImage'
+        type: array
+      i18n:
+        $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.I18n'
+      localities:
+        items:
+          $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Locality'
+        type: array
+      main_image_url:
+        type: string
+      related_minerals:
+        items:
+          type: string
+        type: array
+      safety_notes:
+        type: string
+      scientific:
+        $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Scientific'
+    type: object
 info:
   contact: {}
 paths:
   /api/v1/filters:
     get:
-      description: Возвращает списки для фильтров фронтенда
+      description: Возвращает списки доступных значений для фронтенда
       produces:
       - application/json
       responses:
@@ -259,22 +311,21 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_repository.FilterValues'
-      summary: Получить доступные значения фильтров
+      summary: Получить значения для фильтров
       tags:
       - filters
   /api/v1/minerals:
     get:
       consumes:
       - application/json
-      description: Возвращает список минералов с фильтрацией и пагинацией
+      description: Возвращает список самоцветов с поддержкой фильтрации, сортировки
+        и пагинации
       parameters:
-      - default: ru
-        description: Язык (ru/en)
+      - description: Язык ответа
         in: query
         name: lang
         type: string
-      - default: normal
-        description: Режим (normal/esoteric)
+      - description: Режим отображения
         in: query
         name: view
         type: string
@@ -282,6 +333,18 @@ paths:
         in: query
         name: rarity
         type: string
+      - description: Группа минерала
+        in: query
+        name: mineral_group
+        type: string
+      - description: Цвет
+        in: query
+        name: color
+        type: string
+      - description: Только российские
+        in: query
+        name: russian_only
+        type: boolean
       - description: Минимальная твёрдость
         in: query
         name: hardness_min
@@ -290,17 +353,19 @@ paths:
         in: query
         name: hardness_max
         type: number
-      - description: Только российские
+      - description: Сортировка
         in: query
-        name: russian_only
-        type: boolean
-      - default: 20
-        description: Лимит
+        name: sort
+        type: string
+      - description: Порядок сортировки
+        in: query
+        name: order
+        type: string
+      - description: Количество на странице
         in: query
         name: limit
         type: integer
-      - default: 1
-        description: Страница
+      - description: Страница
         in: query
         name: page
         type: integer
@@ -314,24 +379,77 @@ paths:
       summary: Получить список минералов
       tags:
       - minerals
-  /api/v1/minerals/{slug}:
-    get:
+    post:
       consumes:
       - application/json
-      description: Возвращает полную карточку минерала
+      description: Создаёт новый самоцвет/минерал в базе (админка)
+      parameters:
+      - description: Данные минерала
+        in: body
+        name: mineral
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.CreateMineralRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Mineral'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      summary: Создать новый минерал
+      tags:
+      - minerals
+  /api/v1/minerals/{slug}:
+    delete:
+      consumes:
+      - application/json
+      description: Удаляет минерал по slug (админка)
       parameters:
       - description: Slug минерала
         in: path
         name: slug
         required: true
         type: string
-      - default: ru
-        description: Язык (ru/en)
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      summary: Удалить минерал
+      tags:
+      - minerals
+    get:
+      consumes:
+      - application/json
+      description: Возвращает полную детальную карточку самоцвета
+      parameters:
+      - description: Slug минерала
+        in: path
+        name: slug
+        required: true
+        type: string
+      - description: Язык
         in: query
         name: lang
         type: string
-      - default: normal
-        description: Режим (normal/esoteric)
+      - description: Режим
         in: query
         name: view
         type: string
@@ -349,35 +467,69 @@ paths:
       summary: Получить минерал по slug
       tags:
       - minerals
+    put:
+      consumes:
+      - application/json
+      description: Обновляет данные существующего минерала по slug (админка)
+      parameters:
+      - description: Slug минерала
+        in: path
+        name: slug
+        required: true
+        type: string
+      - description: Обновлённые данные
+        in: body
+        name: mineral
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.UpdateMineralRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Mineral'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      summary: Обновить минерал
+      tags:
+      - minerals
   /api/v1/search:
     get:
       consumes:
       - application/json
-      description: Полнотекстовый поиск по названию, синонимам, лору и химической
-        формуле
+      description: Полнотекстовый поиск по названию, синонимам, lore и химической
+        формуле (работает на ru+en)
       parameters:
       - description: Поисковый запрос
         in: query
         name: q
         required: true
         type: string
-      - default: ru
-        description: Язык (ru/en)
+      - description: Язык ответа
         in: query
         name: lang
         type: string
-      - default: normal
-        description: Режим (normal/esoteric)
+      - description: Режим
         in: query
         name: view
         type: string
-      - default: 20
-        description: Лимит
+      - description: Лимит
         in: query
         name: limit
         type: integer
-      - default: 1
-        description: Страница
+      - description: Страница
         in: query
         name: page
         type: integer

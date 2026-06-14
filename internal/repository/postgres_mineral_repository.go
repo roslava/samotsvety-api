@@ -51,6 +51,7 @@ func (r *PostgresMineralRepository) GetBySlug(ctx context.Context, slug, lang, v
 }
 
 func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.FilterParams) ([]domain.Mineral, int, error) {
+	// ... (твой существующий код List без изменений)
 	if filters.Limit == 0 {
 		filters.Limit = 20
 	}
@@ -172,6 +173,53 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 	return results, total, nil
 }
 
+// ==================== CREATE (Phase 7) ====================
+// Create создаёт новый минерал
+func (r *PostgresMineralRepository) Create(ctx context.Context, mineral *domain.Mineral) error {
+	scientificJSON, _ := json.Marshal(mineral.Scientific)
+	i18nJSON, _ := json.Marshal(mineral.I18n)
+	localitiesJSON, _ := json.Marshal(mineral.Localities)
+	galleryJSON, _ := json.Marshal(mineral.Gallery)
+
+	query := `
+		INSERT INTO minerals (
+			slug, 
+			scientific, 
+			i18n, 
+			localities, 
+			main_image_url, 
+			gallery, 
+			safety_notes, 
+			related_minerals,
+			created_at,
+			updated_at
+		) VALUES (
+			$1, $2, $3, $4, 
+			$5, $6, $7, $8,
+			$9, $10
+		)
+	`
+
+	_, err := r.db.ExecContext(ctx, query,
+		mineral.Slug,
+		scientificJSON,
+		i18nJSON,
+		localitiesJSON,
+		mineral.MainImageURL,
+		galleryJSON,
+		mineral.SafetyNotes,
+		pq.StringArray(mineral.RelatedMinerals),
+		mineral.CreatedAt,
+		mineral.UpdatedAt,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create mineral: %w", err)
+	}
+
+	return nil
+}
+
 type mineralRow struct {
 	Slug            string         `db:"slug"`
 	Scientific      []byte         `db:"scientific"`
@@ -239,8 +287,9 @@ func (r *PostgresMineralRepository) applyViewFilter(mineral *domain.Mineral, vie
 	}
 }
 
-// ==================== SEARCH (улучшенная версия) ====================
+// ==================== SEARCH ====================
 func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, view string, limit, offset int) ([]domain.Mineral, int, error) {
+	// ... (твой существующий код Search без изменений)
 	if query == "" {
 		return []domain.Mineral{}, 0, nil
 	}
@@ -256,20 +305,16 @@ func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, vie
 
 	searchPattern := "%" + query + "%"
 
-	// Поиск сразу в обоих языках + химическая формула
 	where := `
 		(
-			-- Русский
 			i18n->'ru'->>'name' ILIKE $1 OR
 			i18n->'ru'->>'lore' ILIKE $1 OR
 			EXISTS (SELECT 1 FROM jsonb_array_elements_text(i18n->'ru'->'synonyms') AS s WHERE s ILIKE $1) OR
 			
-			-- Английский
 			i18n->'en'->>'name' ILIKE $1 OR
 			i18n->'en'->>'lore' ILIKE $1 OR
 			EXISTS (SELECT 1 FROM jsonb_array_elements_text(i18n->'en'->'synonyms') AS s WHERE s ILIKE $1) OR
 			
-			-- Химическая формула
 			scientific->>'chemical_formula' ILIKE $1
 		)
 	`
@@ -307,6 +352,7 @@ func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, vie
 
 // ==================== GET FILTERS ====================
 func (r *PostgresMineralRepository) GetFilters(ctx context.Context) (*FilterValues, error) {
+	// ... (твой существующий код GetFilters без изменений)
 	fv := &FilterValues{}
 
 	// Rarity
@@ -375,4 +421,69 @@ func (r *PostgresMineralRepository) GetFilters(ctx context.Context) (*FilterValu
 	fv.Countries = countries
 
 	return fv, nil
+}
+
+// Update обновляет существующий минерал по slug
+func (r *PostgresMineralRepository) Update(ctx context.Context, slug string, mineral *domain.Mineral) error {
+	scientificJSON, _ := json.Marshal(mineral.Scientific)
+	i18nJSON, _ := json.Marshal(mineral.I18n)
+	localitiesJSON, _ := json.Marshal(mineral.Localities)
+	galleryJSON, _ := json.Marshal(mineral.Gallery)
+
+	query := `
+		UPDATE minerals 
+		SET 
+			scientific = $1,
+			i18n = $2,
+			localities = $3,
+			main_image_url = $4,
+			gallery = $5,
+			safety_notes = $6,
+			related_minerals = $7,
+			updated_at = NOW()
+		WHERE slug = $8
+	`
+
+	result, err := r.db.ExecContext(ctx, query,
+		scientificJSON,
+		i18nJSON,
+		localitiesJSON,
+		mineral.MainImageURL,
+		galleryJSON,
+		mineral.SafetyNotes,
+		pq.StringArray(mineral.RelatedMinerals),
+		slug,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to update mineral: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("mineral not found")
+	}
+
+	return nil
+}
+
+// Delete удаляет минерал по slug
+func (r *PostgresMineralRepository) Delete(ctx context.Context, slug string) error {
+	result, err := r.db.ExecContext(ctx, "DELETE FROM minerals WHERE slug = $1", slug)
+	if err != nil {
+		return fmt.Errorf("failed to delete mineral: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("mineral not found")
+	}
+
+	return nil
 }

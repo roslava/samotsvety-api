@@ -23,6 +23,9 @@ func NewRouter(repo repository.MineralRepository) *gin.Engine {
 		{
 			minerals.GET("", mineralHandler.ListMinerals)
 			minerals.GET("/:slug", mineralHandler.GetMineral)
+			minerals.POST("", mineralHandler.CreateMineral)         // ← Новый
+			minerals.PUT("/:slug", mineralHandler.UpdateMineral)    // ← Новый
+			minerals.DELETE("/:slug", mineralHandler.DeleteMineral) // ← Новый
 		}
 
 		// Поиск

@@ -20,6 +20,16 @@ type MineralRepository interface {
 
 	// GetFilters возвращает доступные значения для фильтров (редкость, цвета, группы и т.д.)
 	GetFilters(ctx context.Context) (*FilterValues, error)
+
+	// Phase 7: Admin CRUD
+	// Create создаёт новый минерал
+	Create(ctx context.Context, mineral *domain.Mineral) error
+
+	// Update обновляет существующий минерал по slug
+	Update(ctx context.Context, slug string, mineral *domain.Mineral) error
+
+	// Delete удаляет минерал по slug
+	Delete(ctx context.Context, slug string) error
 }
 
 // FilterValues содержит доступные значения для фильтрации

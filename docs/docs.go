@@ -17,14 +17,14 @@ const docTemplate = `{
     "paths": {
         "/api/v1/filters": {
             "get": {
-                "description": "Возвращает списки для фильтров фронтенда",
+                "description": "Возвращает списки доступных значений для фронтенда",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "filters"
                 ],
-                "summary": "Получить доступные значения фильтров",
+                "summary": "Получить значения для фильтров",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -37,7 +37,7 @@ const docTemplate = `{
         },
         "/api/v1/minerals": {
             "get": {
-                "description": "Возвращает список минералов с фильтрацией и пагинацией",
+                "description": "Возвращает список самоцветов с поддержкой фильтрации, сортировки и пагинации",
                 "consumes": [
                     "application/json"
                 ],
@@ -51,15 +51,13 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "default": "ru",
-                        "description": "Язык (ru/en)",
+                        "description": "Язык ответа",
                         "name": "lang",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "default": "normal",
-                        "description": "Режим (normal/esoteric)",
+                        "description": "Режим отображения",
                         "name": "view",
                         "in": "query"
                     },
@@ -67,6 +65,24 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Редкость",
                         "name": "rarity",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Группа минерала",
+                        "name": "mineral_group",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Цвет",
+                        "name": "color",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Только российские",
+                        "name": "russian_only",
                         "in": "query"
                     },
                     {
@@ -82,21 +98,25 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "type": "boolean",
-                        "description": "Только российские",
-                        "name": "russian_only",
+                        "type": "string",
+                        "description": "Сортировка",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Порядок сортировки",
+                        "name": "order",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "default": 20,
-                        "description": "Лимит",
+                        "description": "Количество на странице",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "default": 1,
                         "description": "Страница",
                         "name": "page",
                         "in": "query"
@@ -110,11 +130,55 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "post": {
+                "description": "Создаёт новый самоцвет/минерал в базе (админка)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "minerals"
+                ],
+                "summary": "Создать новый минерал",
+                "parameters": [
+                    {
+                        "description": "Данные минерала",
+                        "name": "mineral",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.CreateMineralRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.Mineral"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
+                        }
+                    }
+                }
             }
         },
         "/api/v1/minerals/{slug}": {
             "get": {
-                "description": "Возвращает полную карточку минерала",
+                "description": "Возвращает полную детальную карточку самоцвета",
                 "consumes": [
                     "application/json"
                 ],
@@ -135,15 +199,13 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "default": "ru",
-                        "description": "Язык (ru/en)",
+                        "description": "Язык",
                         "name": "lang",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "default": "normal",
-                        "description": "Режим (normal/esoteric)",
+                        "description": "Режим",
                         "name": "view",
                         "in": "query"
                     }
@@ -162,11 +224,107 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "put": {
+                "description": "Обновляет данные существующего минерала по slug (админка)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "minerals"
+                ],
+                "summary": "Обновить минерал",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Slug минерала",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Обновлённые данные",
+                        "name": "mineral",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.UpdateMineralRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.Mineral"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Удаляет минерал по slug (админка)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "minerals"
+                ],
+                "summary": "Удалить минерал",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Slug минерала",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
+                        }
+                    }
+                }
             }
         },
         "/api/v1/search": {
             "get": {
-                "description": "Полнотекстовый поиск по названию, синонимам, лору и химической формуле",
+                "description": "Полнотекстовый поиск по названию, синонимам, lore и химической формуле (работает на ru+en)",
                 "consumes": [
                     "application/json"
                 ],
@@ -187,28 +345,24 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "default": "ru",
-                        "description": "Язык (ru/en)",
+                        "description": "Язык ответа",
                         "name": "lang",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "default": "normal",
-                        "description": "Режим (normal/esoteric)",
+                        "description": "Режим",
                         "name": "view",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "default": 20,
                         "description": "Лимит",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "default": 1,
                         "description": "Страница",
                         "name": "page",
                         "in": "query"
@@ -558,6 +712,49 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_handler.CreateMineralRequest": {
+            "type": "object",
+            "required": [
+                "i18n",
+                "scientific",
+                "slug"
+            ],
+            "properties": {
+                "gallery": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.GalleryImage"
+                    }
+                },
+                "i18n": {
+                    "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.I18n"
+                },
+                "localities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.Locality"
+                    }
+                },
+                "main_image_url": {
+                    "type": "string"
+                },
+                "related_minerals": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "safety_notes": {
+                    "type": "string"
+                },
+                "scientific": {
+                    "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.Scientific"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_handler.ErrorResponse": {
             "type": "object",
             "properties": {
@@ -589,6 +786,41 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "internal_handler.UpdateMineralRequest": {
+            "type": "object",
+            "properties": {
+                "gallery": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.GalleryImage"
+                    }
+                },
+                "i18n": {
+                    "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.I18n"
+                },
+                "localities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.Locality"
+                    }
+                },
+                "main_image_url": {
+                    "type": "string"
+                },
+                "related_minerals": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "safety_notes": {
+                    "type": "string"
+                },
+                "scientific": {
+                    "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.Scientific"
                 }
             }
         }

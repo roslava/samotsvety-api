@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -13,10 +14,10 @@ import (
 
 // ListResponse — стандартизированный ответ для списков
 type ListResponse struct {
-	Data  []domain.Mineral `json:"data" example:"[{\"slug\":\"malachite\"}]"`
-	Total int              `json:"total" example:"42"`
-	Page  int              `json:"page" example:"1"`
-	Limit int              `json:"limit" example:"20"`
+	Data  []domain.Mineral `json:"data"`
+	Total int              `json:"total"`
+	Page  int              `json:"page"`
+	Limit int              `json:"limit"`
 }
 
 type MineralHandler struct {
@@ -183,4 +184,138 @@ func (h *MineralHandler) GetFilters(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, filters)
+}
+
+// CreateMineral godoc
+// @Summary      Создать новый минерал
+// @Description  Создаёт новый самоцвет/минерал в базе (админка)
+// @Tags         minerals
+// @Accept       json
+// @Produce      json
+// @Param        mineral body handler.CreateMineralRequest true "Данные минерала"
+// @Success      201  {object} domain.Mineral
+// @Failure      400  {object} handler.ErrorResponse
+// @Failure      500  {object} handler.ErrorResponse
+// @Router       /api/v1/minerals [post]
+func (h *MineralHandler) CreateMineral(c *gin.Context) {
+	var req CreateMineralRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		RespondValidationError(c, err)
+		return
+	}
+
+	now := time.Now().UTC()
+
+	mineral := &domain.Mineral{
+		Slug:            req.Slug,
+		Scientific:      req.Scientific,
+		I18n:            req.I18n,
+		Localities:      req.Localities,
+		MainImageURL:    req.MainImageURL,
+		Gallery:         req.Gallery,
+		SafetyNotes:     req.SafetyNotes,
+		RelatedMinerals: req.RelatedMinerals,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+
+	if err := h.repo.Create(c.Request.Context(), mineral); err != nil {
+		slog.Error("Failed to create mineral", "error", err, "slug", req.Slug)
+		RespondInternalError(c, "Не удалось создать минерал")
+		return
+	}
+
+	c.JSON(http.StatusCreated, mineral)
+}
+
+// UpdateMineral godoc
+// @Summary      Обновить минерал
+// @Description  Обновляет данные существующего минерала по slug (админка)
+// @Tags         minerals
+// @Accept       json
+// @Produce      json
+// @Param        slug    path    string                      true  "Slug минерала"
+// @Param        mineral body    handler.UpdateMineralRequest true  "Обновлённые данные"
+// @Success      200     {object} domain.Mineral
+// @Failure      400     {object} handler.ErrorResponse
+// @Failure      404     {object} handler.ErrorResponse
+// @Failure      500     {object} handler.ErrorResponse
+// @Router       /api/v1/minerals/{slug} [put]
+func (h *MineralHandler) UpdateMineral(c *gin.Context) {
+	slug := c.Param("slug")
+
+	var req UpdateMineralRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		RespondValidationError(c, err)
+		return
+	}
+
+	// Получаем текущий минерал
+	mineral, err := h.repo.GetBySlug(c.Request.Context(), slug, "ru", "normal")
+	if err != nil {
+		RespondNotFound(c, "Минерал не найден")
+		return
+	}
+
+	// Обновляем только те поля, которые пришли в запросе
+	if req.Scientific != nil {
+		mineral.Scientific = *req.Scientific
+	}
+	if req.I18n != nil {
+		mineral.I18n = *req.I18n
+	}
+	if req.Localities != nil {
+		mineral.Localities = req.Localities
+	}
+	if req.MainImageURL != nil {
+		mineral.MainImageURL = *req.MainImageURL
+	}
+	if req.Gallery != nil {
+		mineral.Gallery = req.Gallery
+	}
+	if req.SafetyNotes != nil {
+		mineral.SafetyNotes = *req.SafetyNotes
+	}
+	if req.RelatedMinerals != nil {
+		mineral.RelatedMinerals = req.RelatedMinerals
+	}
+
+	if err := h.repo.Update(c.Request.Context(), slug, mineral); err != nil {
+		if err.Error() == "mineral not found" {
+			RespondNotFound(c, "Минерал не найден")
+			return
+		}
+		slog.Error("Failed to update mineral", "error", err, "slug", slug)
+		RespondInternalError(c, "Не удалось обновить минерал")
+		return
+	}
+
+	c.JSON(http.StatusOK, mineral)
+}
+
+// DeleteMineral godoc
+// @Summary      Удалить минерал
+// @Description  Удаляет минерал по slug (админка)
+// @Tags         minerals
+// @Accept       json
+// @Produce      json
+// @Param        slug  path  string  true  "Slug минерала"
+// @Success      204
+// @Failure      404  {object} handler.ErrorResponse
+// @Failure      500  {object} handler.ErrorResponse
+// @Router       /api/v1/minerals/{slug} [delete]
+func (h *MineralHandler) DeleteMineral(c *gin.Context) {
+	slug := c.Param("slug")
+
+	if err := h.repo.Delete(c.Request.Context(), slug); err != nil {
+		if err.Error() == "mineral not found" {
+			RespondNotFound(c, "Минерал не найден")
+			return
+		}
+		slog.Error("Failed to delete mineral", "error", err, "slug", slug)
+		RespondInternalError(c, "Не удалось удалить минерал")
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }

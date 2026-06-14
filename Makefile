@@ -114,3 +114,9 @@ dev-install:
 seed:
 	@echo "Seeding data..."
 	@go run cmd/seed/main.go
+
+# Generate Swagger documentation
+swag:
+	@echo "Generating Swagger docs..."
+	swag init -g cmd/server/main.go --parseDependency --parseInternal --parseDepth 1
+	@echo "Swagger docs generated successfully!"
