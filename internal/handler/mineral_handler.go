@@ -3,6 +3,7 @@ package handler
 import (
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -101,4 +102,56 @@ func (h *MineralHandler) GetMineral(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, mineral)
+}
+
+// SearchMinerals godoc
+// @Summary      Поиск минералов
+// @Description  Полнотекстовый поиск по названию, синонимам, лору и химической формуле
+// @Tags         search
+// @Accept       json
+// @Produce      json
+// @Param        q     query  string true   "Поисковый запрос"
+// @Param        lang  query  string false  "Язык (ru/en)"            default(ru)
+// @Param        view  query  string false  "Режим (normal/esoteric)" default(normal)
+// @Param        limit query  int    false  "Лимит"                   default(20)
+// @Param        page  query  int    false  "Страница"                default(1)
+// @Success      200   {object} ListResponse
+// @Router       /api/v1/search [get]
+func (h *MineralHandler) SearchMinerals(c *gin.Context) {
+	q := c.Query("q")
+	lang := c.DefaultQuery("lang", "ru")
+	view := c.DefaultQuery("view", "normal")
+
+	limitStr := c.DefaultQuery("limit", "20")
+	pageStr := c.DefaultQuery("page", "1")
+
+	limit, _ := strconv.Atoi(limitStr)
+	page, _ := strconv.Atoi(pageStr)
+
+	if limit == 0 {
+		limit = 20
+	}
+	if page == 0 {
+		page = 1
+	}
+
+	offset := (page - 1) * limit
+
+	results, total, err := h.repo.Search(c.Request.Context(), q, lang, view, limit, offset)
+	if err != nil {
+		slog.Error("Search failed", "error", err)
+		RespondInternalError(c, "Search error")
+		return
+	}
+
+	if results == nil {
+		results = []domain.Mineral{}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":  results,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+	})
 }

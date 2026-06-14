@@ -23,9 +23,12 @@ func NewRouter(repo repository.MineralRepository) *gin.Engine {
 			minerals.GET("", mineralHandler.ListMinerals)
 			minerals.GET("/:slug", mineralHandler.GetMineral)
 		}
+
+		// Поиск
+		v1.GET("/search", mineralHandler.SearchMinerals)
 	}
 
-	// Healthcheck (можно оставить и здесь)
+	// Healthcheck
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
