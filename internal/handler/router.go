@@ -18,6 +18,7 @@ func NewRouter(repo repository.MineralRepository) *gin.Engine {
 	// API v1
 	v1 := router.Group("/api/v1")
 	{
+		// Минералы
 		minerals := v1.Group("/minerals")
 		{
 			minerals.GET("", mineralHandler.ListMinerals)
@@ -26,6 +27,9 @@ func NewRouter(repo repository.MineralRepository) *gin.Engine {
 
 		// Поиск
 		v1.GET("/search", mineralHandler.SearchMinerals)
+
+		// Фильтры
+		v1.GET("/filters", mineralHandler.GetFilters)
 	}
 
 	// Healthcheck

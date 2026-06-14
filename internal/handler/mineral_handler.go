@@ -42,7 +42,6 @@ func (h *MineralHandler) ListMinerals(c *gin.Context) {
 		return
 	}
 
-	// Применяем дефолтные значения здесь (до вызова репозитория)
 	if filters.Limit == 0 {
 		filters.Limit = 20
 	}
@@ -154,4 +153,22 @@ func (h *MineralHandler) SearchMinerals(c *gin.Context) {
 		"page":  page,
 		"limit": limit,
 	})
+}
+
+// GetFilters godoc
+// @Summary      Получить доступные значения фильтров
+// @Description  Возвращает списки для фильтров фронтенда
+// @Tags         filters
+// @Produce      json
+// @Success      200 {object} repository.FilterValues
+// @Router       /api/v1/filters [get]
+func (h *MineralHandler) GetFilters(c *gin.Context) {
+	filters, err := h.repo.GetFilters(c.Request.Context())
+	if err != nil {
+		slog.Error("GetFilters failed", "error", err)
+		RespondInternalError(c, "Failed to get filters")
+		return
+	}
+
+	c.JSON(http.StatusOK, filters)
 }

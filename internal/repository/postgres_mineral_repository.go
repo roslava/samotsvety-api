@@ -37,7 +37,6 @@ func (r *PostgresMineralRepository) GetBySlug(ctx context.Context, slug, lang, v
 
 	mineral := m.toMineral()
 
-	// defaults
 	if lang == "" {
 		lang = "ru"
 	}
@@ -52,7 +51,6 @@ func (r *PostgresMineralRepository) GetBySlug(ctx context.Context, slug, lang, v
 }
 
 func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.FilterParams) ([]domain.Mineral, int, error) {
-	// Значения по умолчанию
 	if filters.Limit == 0 {
 		filters.Limit = 20
 	}
@@ -71,19 +69,16 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 
 	offset := (filters.Page - 1) * filters.Limit
 
-	// === Строим WHERE условия ===
 	var conditions []string
 	var args []interface{}
 	argIdx := 1
 
-	// Rarity
 	if filters.Rarity != "" {
 		conditions = append(conditions, fmt.Sprintf("scientific->>'rarity' = $%d", argIdx))
 		args = append(args, filters.Rarity)
 		argIdx++
 	}
 
-	// Hardness range
 	if filters.HardnessMin > 0 {
 		conditions = append(conditions, fmt.Sprintf("(scientific->'hardness'->>'min')::float >= $%d", argIdx))
 		args = append(args, filters.HardnessMin)
@@ -95,14 +90,12 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 		argIdx++
 	}
 
-	// Mineral Group
 	if filters.MineralGroup != "" {
 		conditions = append(conditions, fmt.Sprintf("scientific->>'mineral_group' ILIKE $%d", argIdx))
 		args = append(args, "%"+filters.MineralGroup+"%")
 		argIdx++
 	}
 
-	// Color (ищем внутри JSON-массива i18n)
 	if filters.Color != "" {
 		langKey := "ru"
 		if filters.Lang == "en" {
@@ -117,7 +110,6 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 		argIdx++
 	}
 
-	// Russian only (защита от null/отсутствующего поля)
 	if filters.RussianOnly {
 		conditions = append(conditions, `EXISTS (
 			SELECT 1 FROM jsonb_array_elements(COALESCE(localities, '[]'::jsonb)) AS loc 
@@ -125,7 +117,6 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 		)`)
 	}
 
-	// === Сортировка ===
 	sortField := "created_at"
 	switch filters.Sort {
 	case "name":
@@ -143,7 +134,6 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 		order = "ASC"
 	}
 
-	// === Собираем финальный запрос ===
 	whereClause := ""
 	if len(conditions) > 0 {
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
@@ -165,14 +155,12 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 		return nil, 0, fmt.Errorf("list query error: %w", err)
 	}
 
-	// Total count (с теми же фильтрами)
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM minerals %s", whereClause)
 	var total int
 	if err := r.db.GetContext(ctx, &total, countQuery, args[:len(args)-2]...); err != nil {
 		return nil, 0, fmt.Errorf("count query error: %w", err)
 	}
 
-	// Применяем lang и view фильтры
 	var results []domain.Mineral
 	for _, row := range rows {
 		mineral := row.toMineral()
@@ -251,7 +239,7 @@ func (r *PostgresMineralRepository) applyViewFilter(mineral *domain.Mineral, vie
 	}
 }
 
-// Заглушки
+// ==================== SEARCH ====================
 func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, view string, limit, offset int) ([]domain.Mineral, int, error) {
 	if query == "" {
 		return []domain.Mineral{}, 0, nil
@@ -271,10 +259,8 @@ func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, vie
 		langKey = "en"
 	}
 
-	// Строим условия поиска
 	searchPattern := "%" + query + "%"
 
-	// ILIKE по name, lore + поиск в массиве synonyms + chemical_formula
 	where := fmt.Sprintf(`
 		(
 			i18n->'%s'->>'name' ILIKE $1 OR
@@ -301,14 +287,12 @@ func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, vie
 		return nil, 0, fmt.Errorf("search query error: %w", err)
 	}
 
-	// Total count
 	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM minerals WHERE %s", where)
 	var total int
 	if err := r.db.GetContext(ctx, &total, countSQL, searchPattern); err != nil {
 		return nil, 0, fmt.Errorf("search count error: %w", err)
 	}
 
-	// Применяем lang + view
 	var results []domain.Mineral
 	for _, row := range rows {
 		mineral := row.toMineral()
@@ -320,6 +304,74 @@ func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, vie
 	return results, total, nil
 }
 
+// ==================== GET FILTERS ====================
 func (r *PostgresMineralRepository) GetFilters(ctx context.Context) (*FilterValues, error) {
-	return &FilterValues{}, nil
+	fv := &FilterValues{}
+
+	// Rarity
+	var rarities []string
+	if err := r.db.SelectContext(ctx, &rarities, `
+		SELECT DISTINCT scientific->>'rarity' 
+		FROM minerals 
+		WHERE scientific->>'rarity' IS NOT NULL 
+		ORDER BY 1
+	`); err != nil {
+		return nil, fmt.Errorf("failed to get rarities: %w", err)
+	}
+	fv.Rarities = rarities
+
+	// Mineral Groups
+	var groups []string
+	if err := r.db.SelectContext(ctx, &groups, `
+		SELECT DISTINCT scientific->>'mineral_group' 
+		FROM minerals 
+		WHERE scientific->>'mineral_group' IS NOT NULL 
+		ORDER BY 1
+	`); err != nil {
+		return nil, fmt.Errorf("failed to get mineral_groups: %w", err)
+	}
+	fv.MineralGroups = groups
+
+	// Hardness Range
+	type hr struct {
+		Min float64 `db:"min"`
+		Max float64 `db:"max"`
+	}
+	var hardness hr
+	if err := r.db.GetContext(ctx, &hardness, `
+		SELECT 
+			COALESCE(MIN((scientific->'hardness'->>'min')::float), 0) as min,
+			COALESCE(MAX((scientific->'hardness'->>'max')::float), 0) as max
+		FROM minerals
+	`); err != nil {
+		return nil, fmt.Errorf("failed to get hardness range: %w", err)
+	}
+	fv.HardnessRange.Min = hardness.Min
+	fv.HardnessRange.Max = hardness.Max
+
+	// Colors (из русского языка)
+	var colors []string
+	if err := r.db.SelectContext(ctx, &colors, `
+		SELECT DISTINCT jsonb_array_elements_text(i18n->'ru'->'color')
+		FROM minerals
+		WHERE i18n->'ru'->'color' IS NOT NULL
+		ORDER BY 1
+	`); err != nil {
+		return nil, fmt.Errorf("failed to get colors: %w", err)
+	}
+	fv.Colors = colors
+
+	// Countries
+	var countries []string
+	if err := r.db.SelectContext(ctx, &countries, `
+		SELECT DISTINCT loc->>'country'
+		FROM minerals, jsonb_array_elements(COALESCE(localities, '[]'::jsonb)) AS loc
+		WHERE loc->>'country' IS NOT NULL
+		ORDER BY 1
+	`); err != nil {
+		countries = []string{}
+	}
+	fv.Countries = countries
+
+	return fv, nil
 }
