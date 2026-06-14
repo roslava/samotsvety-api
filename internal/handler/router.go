@@ -12,6 +12,7 @@ func NewRouter(repo repository.MineralRepository) *gin.Engine {
 	// Middleware
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
+	router.Use(CORS()) // ← Используем существующий middleware
 
 	mineralHandler := NewMineralHandler(repo)
 
@@ -23,9 +24,9 @@ func NewRouter(repo repository.MineralRepository) *gin.Engine {
 		{
 			minerals.GET("", mineralHandler.ListMinerals)
 			minerals.GET("/:slug", mineralHandler.GetMineral)
-			minerals.POST("", mineralHandler.CreateMineral)         // ← Новый
-			minerals.PUT("/:slug", mineralHandler.UpdateMineral)    // ← Новый
-			minerals.DELETE("/:slug", mineralHandler.DeleteMineral) // ← Новый
+			minerals.POST("", mineralHandler.CreateMineral)
+			minerals.PUT("/:slug", mineralHandler.UpdateMineral)
+			minerals.DELETE("/:slug", mineralHandler.DeleteMineral)
 		}
 
 		// Поиск
