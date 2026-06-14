@@ -138,7 +138,7 @@
   - Добавить поддержку `color`, `mineral_group` и других фильтров
   - Сортировка (`name`, `rarity`, `hardness`)
 
-- [ ] **4.2** Эндпоинт `GET /api/v1/search`
+- [х] **4.2** Эндпоинт `GET /api/v1/search`
   - Полнотекстовый поиск по `name`, `synonyms`, `lore` (сначала через ILIKE / позже FTS)
   - Поддержка `lang` и `view`
 
