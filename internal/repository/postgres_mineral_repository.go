@@ -434,8 +434,20 @@ func (r *PostgresMineralRepository) GetFilters(ctx context.Context) (*FilterValu
 	return fv, nil
 }
 
-// Update обновляет существующий минерал по slug
-func (r *PostgresMineralRepository) Update(ctx context.Context, slug string, mineral *domain.Mineral) error {
+// Update обновляет существующий минерал (с поддержкой смены slug)
+func (r *PostgresMineralRepository) Update(ctx context.Context, oldSlug string, mineral *domain.Mineral) error {
+	// Если slug меняется — проверяем уникальность
+	if mineral.Slug != oldSlug {
+		var count int
+		err := r.db.GetContext(ctx, &count, "SELECT COUNT(*) FROM minerals WHERE slug = $1", mineral.Slug)
+		if err != nil {
+			return fmt.Errorf("failed to check slug uniqueness: %w", err)
+		}
+		if count > 0 {
+			return fmt.Errorf("slug_already_exists")
+		}
+	}
+
 	scientificJSON, _ := json.Marshal(mineral.Scientific)
 	i18nJSON, _ := json.Marshal(mineral.I18n)
 	localitiesJSON, _ := json.Marshal(mineral.Localities)
@@ -444,18 +456,19 @@ func (r *PostgresMineralRepository) Update(ctx context.Context, slug string, min
 	query := `
 		UPDATE minerals 
 		SET 
-			scientific = $1,
-			i18n = $2,
-			localities = $3,
-			main_image_url = $4,
-			gallery = $5,
-			safety_notes = $6,
-			related_minerals = $7,
+			slug = $1,
+			scientific = $2,
+			i18n = $3,
+			localities = $4,
+			main_image_url = $5,
+			gallery = $6,
+			safety_notes = $7,
+			related_minerals = $8,
 			updated_at = NOW()
-		WHERE slug = $8
-	`
+		WHERE slug = $9`
 
-	result, err := r.db.ExecContext(ctx, query,
+	_, err := r.db.ExecContext(ctx, query,
+		mineral.Slug,
 		scientificJSON,
 		i18nJSON,
 		localitiesJSON,
@@ -463,19 +476,11 @@ func (r *PostgresMineralRepository) Update(ctx context.Context, slug string, min
 		galleryJSON,
 		mineral.SafetyNotes,
 		pq.StringArray(mineral.RelatedMinerals),
-		slug,
+		oldSlug,
 	)
 
 	if err != nil {
 		return fmt.Errorf("failed to update mineral: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("mineral not found")
 	}
 
 	return nil

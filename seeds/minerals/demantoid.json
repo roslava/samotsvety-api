@@ -1,0 +1,55 @@
+{
+  "slug": "demantoid",
+  "scientific": {
+    "chemical_formula": "Ca₃Fe₂(SiO₄)₃",
+    "mineral_group": "гранаты",
+    "crystal_system": "кубическая",
+    "crystal_habit": "ромбододекаэдрический, тетрагонтриоктаэдрический",
+    "hardness": {
+      "min": 6.5,
+      "max": 7
+    },
+    "specific_gravity": {
+      "min": 3.8,
+      "max": 3.9
+    },
+    "streak": "белая",
+    "luster": "алмазный",
+    "transparency": "прозрачный",
+    "cleavage": "отсутствует",
+    "fracture": "неровный, раковистый",
+    "rarity": "rare",
+    "identification_tips": "Ярко-зелёный цвет с алмазным блеском и характерными 'конскими хвостами'"
+  },
+  "i18n": {
+    "ru": {
+      "name": "Демантоид",
+      "synonyms": ["уральский гранат", "зелёный гранат"],
+      "color": ["зелёный", "изумрудно-зелёный", "травяно-зелёный"],
+      "color_description": "Насыщенный зелёный цвет с алмазным блеском",
+      "lore": "Демантоид был открыт на Урале в середине XIX века. Долгое время считался одним из самых дорогих гранатов в мире. Особенно ценятся камни с 'конскими хвостами' — включениями биссолита.",
+      "esoteric": {
+        "metaphysical_properties": ["творчество", "процветание", "защита", "гармония"],
+        "chakras": ["сердечная чакра", "солнечное сплетение"],
+        "zodiac": ["Лев", "Телец"]
+      }
+    },
+    "en": {
+      "name": "Demantoid",
+      "synonyms": ["Ural garnet", "green garnet"],
+      "color": ["green", "emerald green", "grass green"],
+      "color_description": "Rich green colour with diamond-like brilliance",
+      "lore": "Demantoid was discovered in the Urals in the mid-19th century. For a long time it was considered one of the most expensive garnets in the world. Stones with 'horse tails' (byssolite inclusions) are especially valued.",
+      "esoteric": {
+        "metaphysical_properties": ["creativity", "prosperity", "protection", "harmony"],
+        "chakras": ["heart chakra", "solar plexus"],
+        "zodiac": ["Leo", "Taurus"]
+      }
+    }
+  },
+  "main_image_url": "https://example.com/images/demantoid-hero.jpg",
+  "safety_notes": "",
+  "localities": [],
+  "gallery": [],
+  "related_minerals": ["andradite", "grossular"]
+}
