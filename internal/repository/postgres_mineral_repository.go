@@ -253,7 +253,71 @@ func (r *PostgresMineralRepository) applyViewFilter(mineral *domain.Mineral, vie
 
 // Заглушки
 func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, view string, limit, offset int) ([]domain.Mineral, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
+	if query == "" {
+		return []domain.Mineral{}, 0, nil
+	}
+	if lang == "" {
+		lang = "ru"
+	}
+	if view == "" {
+		view = "normal"
+	}
+	if limit == 0 {
+		limit = 20
+	}
+
+	langKey := "ru"
+	if lang == "en" {
+		langKey = "en"
+	}
+
+	// Строим условия поиска
+	searchPattern := "%" + query + "%"
+
+	// ILIKE по name, lore + поиск в массиве synonyms + chemical_formula
+	where := fmt.Sprintf(`
+		(
+			i18n->'%s'->>'name' ILIKE $1 OR
+			i18n->'%s'->>'lore' ILIKE $1 OR
+			EXISTS (
+				SELECT 1 FROM jsonb_array_elements_text(i18n->'%s'->'synonyms') AS s 
+				WHERE s ILIKE $1
+			) OR
+			scientific->>'chemical_formula' ILIKE $1
+		)
+	`, langKey, langKey, langKey)
+
+	querySQL := fmt.Sprintf(`
+		SELECT slug, scientific, i18n, main_image_url, safety_notes,
+		       localities, gallery, related_minerals, created_at, updated_at
+		FROM minerals
+		WHERE %s
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`, where)
+
+	var rows []mineralRow
+	if err := r.db.SelectContext(ctx, &rows, querySQL, searchPattern, limit, offset); err != nil {
+		return nil, 0, fmt.Errorf("search query error: %w", err)
+	}
+
+	// Total count
+	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM minerals WHERE %s", where)
+	var total int
+	if err := r.db.GetContext(ctx, &total, countSQL, searchPattern); err != nil {
+		return nil, 0, fmt.Errorf("search count error: %w", err)
+	}
+
+	// Применяем lang + view
+	var results []domain.Mineral
+	for _, row := range rows {
+		mineral := row.toMineral()
+		r.applyLangFilter(mineral, lang)
+		r.applyViewFilter(mineral, view)
+		results = append(results, *mineral)
+	}
+
+	return results, total, nil
 }
 
 func (r *PostgresMineralRepository) GetFilters(ctx context.Context) (*FilterValues, error) {
