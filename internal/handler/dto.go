@@ -25,3 +25,14 @@ type UpdateMineralRequest struct {
 	SafetyNotes     *string                `json:"safety_notes,omitempty"`
 	RelatedMinerals *[]string              `json:"related_minerals,omitempty"` // указатель
 }
+
+// ListMineralsRequest — параметры списка с пагинацией и фильтрами
+type ListMineralsRequest struct {
+	Page        int    `form:"page" validate:"omitempty,min=1"`
+	Limit       int    `form:"limit" validate:"omitempty,min=1,max=100"`
+	Sort        string `form:"sort" validate:"omitempty,oneof=created_at name rarity hardness"`
+	Order       string `form:"order" validate:"omitempty,oneof=asc desc"`
+	Lang        string `form:"lang" validate:"omitempty,oneof=ru en"`
+	View        string `form:"view" validate:"omitempty,oneof=normal esoteric"`
+	RussianOnly bool   `form:"russian_only"`
+}

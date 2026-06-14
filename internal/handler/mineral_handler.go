@@ -35,42 +35,62 @@ func NewMineralHandler(repo repository.MineralRepository) *MineralHandler {
 // @Tags         minerals
 // @Accept       json
 // @Produce      json
-// @Param        lang         query  string   false  "Язык ответа"                  default=ru  enum(ru,en)
-// @Param        view         query  string   false  "Режим отображения"            default=normal enum(normal,esoteric)
-// @Param        rarity       query  string   false  "Редкость"
-// @Param        mineral_group query string  false  "Группа минерала"
-// @Param        color        query  string   false  "Цвет"
-// @Param        russian_only query  bool     false  "Только российские"
-// @Param        hardness_min query  number   false  "Минимальная твёрдость"
-// @Param        hardness_max query  number   false  "Максимальная твёрдость"
-// @Param        sort         query  string   false  "Сортировка"                   default=created_at enum(name,rarity,hardness,created_at)
-// @Param        order        query  string   false  "Порядок сортировки"           default=desc    enum(asc,desc)
-// @Param        limit        query  int      false  "Количество на странице"       default=20
-// @Param        page         query  int      false  "Страница"                     default=1
+// @Param        page          query  int     false  "Номер страницы"                     default=1
+// @Param        limit         query  int     false  "Количество на странице"             default=20  maximum(100)
+// @Param        sort          query  string  false  "Сортировка"                         default=created_at  Enums(created_at,name,rarity,hardness)
+// @Param        order         query  string  false  "Порядок"                            default=desc    Enums(asc,desc)
+// @Param        lang          query  string  false  "Язык"                               default=ru      Enums(ru,en)
+// @Param        view          query  string  false  "Режим"                              default=normal  Enums(normal,esoteric)
+// @Param        russian_only  query  bool    false  "Только российские"
+// @Param        rarity        query  string  false  "Редкость"
+// @Param        mineral_group query  string  false  "Группа"
+// @Param        color         query  string  false  "Цвет"
+// @Param        hardness_min  query  number  false  "Минимальная твёрдость"
+// @Param        hardness_max  query  number  false  "Максимальная твёрдость"
 // @Success      200  {object}  ListResponse
 // @Router       /api/v1/minerals [get]
 func (h *MineralHandler) ListMinerals(c *gin.Context) {
-	var filters domain.FilterParams
-	if err := c.ShouldBindQuery(&filters); err != nil {
-		RespondBadRequest(c, err.Error())
+	var req ListMineralsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		RespondValidationError(c, err)
 		return
 	}
 
-	if filters.Limit == 0 {
-		filters.Limit = 20
+	// Дефолтные значения
+	if req.Page < 1 {
+		req.Page = 1
 	}
-	if filters.Page == 0 {
-		filters.Page = 1
+	if req.Limit < 1 || req.Limit > 100 {
+		req.Limit = 20
 	}
-	if filters.Lang == "" {
-		filters.Lang = "ru"
+	if req.Sort == "" {
+		req.Sort = "created_at"
 	}
-	if filters.View == "" {
-		filters.View = "normal"
+	if req.Order == "" {
+		req.Order = "desc"
 	}
-	if filters.Order == "" {
-		filters.Order = "desc"
+	if req.Lang == "" {
+		req.Lang = "ru"
 	}
+	if req.View == "" {
+		req.View = "normal"
+	}
+
+	filters := domain.FilterParams{
+		Page:        req.Page,
+		Limit:       req.Limit,
+		Sort:        req.Sort,
+		Order:       req.Order,
+		Lang:        req.Lang,
+		View:        req.View,
+		RussianOnly: req.RussianOnly,
+		// Дополнительные фильтры (если они есть в FilterParams)
+		Rarity:       c.Query("rarity"),
+		MineralGroup: c.Query("mineral_group"),
+		Color:        c.Query("color"),
+	}
+
+	// Для hardness_min / hardness_max можно добавить отдельно, если нужно
 
 	minerals, total, err := h.repo.List(c.Request.Context(), filters)
 	if err != nil {
@@ -83,11 +103,11 @@ func (h *MineralHandler) ListMinerals(c *gin.Context) {
 		minerals = []domain.Mineral{}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data":  minerals,
-		"total": total,
-		"page":  filters.Page,
-		"limit": filters.Limit,
+	c.JSON(http.StatusOK, ListResponse{
+		Data:  minerals,
+		Total: total,
+		Page:  req.Page,
+		Limit: req.Limit,
 	})
 }
 

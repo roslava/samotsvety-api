@@ -278,18 +278,21 @@ definitions:
   internal_handler.UpdateMineralRequest:
     properties:
       gallery:
+        description: указатель
         items:
           $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.GalleryImage'
         type: array
       i18n:
         $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.I18n'
       localities:
+        description: указатель — важно!
         items:
           $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Locality'
         type: array
       main_image_url:
         type: string
       related_minerals:
+        description: указатель
         items:
           type: string
         type: array
@@ -297,6 +300,8 @@ definitions:
         type: string
       scientific:
         $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Scientific'
+      slug:
+        type: string
     type: object
 info:
   contact: {}
@@ -471,44 +476,6 @@ paths:
       summary: Получить минерал по slug
       tags:
       - minerals
-    put:
-      consumes:
-      - application/json
-      description: Обновляет данные существующего минерала по slug (админка)
-      parameters:
-      - description: Slug минерала
-        in: path
-        name: slug
-        required: true
-        type: string
-      - description: Обновлённые данные
-        in: body
-        name: mineral
-        required: true
-        schema:
-          $ref: '#/definitions/internal_handler.UpdateMineralRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Mineral'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/internal_handler.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/internal_handler.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/internal_handler.ErrorResponse'
-      summary: Обновить минерал
-      tags:
-      - minerals
   /api/v1/search:
     get:
       consumes:
@@ -547,4 +514,42 @@ paths:
       summary: Поиск минералов
       tags:
       - search
+  /minerals/{slug}:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Slug минерала
+        in: path
+        name: slug
+        required: true
+        type: string
+      - description: Данные для обновления
+        in: body
+        name: mineral
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.UpdateMineralRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Mineral'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      summary: Обновить минерал
+      tags:
+      - minerals
 swagger: "2.0"

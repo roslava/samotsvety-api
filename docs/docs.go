@@ -231,63 +231,6 @@ const docTemplate = `{
                     }
                 }
             },
-            "put": {
-                "description": "Обновляет данные существующего минерала по slug (админка)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "minerals"
-                ],
-                "summary": "Обновить минерал",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Slug минерала",
-                        "name": "slug",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Обновлённые данные",
-                        "name": "mineral",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.UpdateMineralRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.Mineral"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "delete": {
                 "description": "Удаляет минерал по slug (админка)",
                 "consumes": [
@@ -379,6 +322,64 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/internal_handler.ListResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/minerals/{slug}": {
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "minerals"
+                ],
+                "summary": "Обновить минерал",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Slug минерала",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Данные для обновления",
+                        "name": "mineral",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.UpdateMineralRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.Mineral"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
                         }
                     }
                 }
@@ -799,6 +800,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "gallery": {
+                    "description": "указатель",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.GalleryImage"
@@ -808,6 +810,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.I18n"
                 },
                 "localities": {
+                    "description": "указатель — важно!",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.Locality"
@@ -817,6 +820,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "related_minerals": {
+                    "description": "указатель",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -827,6 +831,9 @@ const docTemplate = `{
                 },
                 "scientific": {
                     "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.Scientific"
+                },
+                "slug": {
+                    "type": "string"
                 }
             }
         }
