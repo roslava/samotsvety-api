@@ -72,13 +72,13 @@ migrate-down:
 
 # Seed database
 seed:
-	@echo "Seeding database..."
+	@echo "Seeding data..."
 	@if [ ! -d "seeds/minerals" ]; then \
-		echo "Warning: seeds/minerals directory not found"; \
+		echo "Error: seeds/minerals directory not found"; \
 		exit 1; \
 	fi
-	@echo "Seed data location: seeds/minerals/"
-	@echo "TODO: Implement seed command or use Go seed utility"
+	@go run cmd/seed/main.go
+	@echo "✅ Seeding completed!"
 
 # Docker database operations
 db-up:
@@ -110,10 +110,6 @@ dev-install:
 	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 	go install github.com/swaggo/swag/cmd/swag@latest
 	@echo "Development tools installed"
-
-seed:
-	@echo "Seeding data..."
-	@go run cmd/seed/main.go
 
 # Generate Swagger documentation
 swag:
