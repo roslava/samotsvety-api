@@ -4,147 +4,93 @@
 
 ## Основные возможности
 
-- Полноценный REST API для работы с минералами и самоцветами
-- Двуязычность (русский + английский)
-- Два режима отображения: **научный** и **с эзотерикой**
-- Расширенная фильтрация, сортировка и полнотекстовый поиск
-- Качественная Swagger-документация
+- Полноценный CRUD для минералов
+- Двуязычность (`?lang=ru|en`)
+- Два режима отображения (`?view=normal|esoteric`)
+- Полнотекстовый поиск и расширенная фильтрация
+- Чистая архитектура (Go + Gin + PostgreSQL + sqlx)
+- Защита админских операций через API Key
 
 ## Быстрый старт
 
-### Через Docker (рекомендуется)
-
 ```bash
-docker-compose up -d
-```
-### Локально
-
-```bash
-git clone https://github.com/roslava/samotsvety-api.git
-cd samotsvety-api
-
-go mod tidy
-go run cmd/server/main.go
+make db-up          # Запуск PostgreSQL
+make migrate-up     # Применить миграции
+make seed           # Наполнить данными (российские самоцветы)
+make run            # Запуск сервера
 ```
 
-Сервер будет доступен по адресу: http://localhost:8080
+Сервер: http://localhost:8080
+Swagger: http://localhost:8080/swagger/index.html
 
-## Основные эндпоинты
+## Админские операции (POST / PUT / DELETE)
 
-GET
-/api/v1/minerals
-Список минералов + фильтры
+Все изменяющие методы защищены заголовком X-API-Key.
 
-GET
-/api/v1/minerals/{slug}
-Полная карточка минерала
+```bash
+# Пример обновления
+curl -X PUT http://localhost:8080/api/v1/minerals/malachite \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: super-secret-admin-key-change-me" \
+  -d '{"safety_notes": "Обновлённая информация о безопасности..."}'
+  ```
 
-GET
-/api/v1/search
-Полнотекстовый поиск
+  Ключ настраивается в .env:
 
-GET
-/api/v1/filters
-Значения для фильтров
+  ```bash
+  ADMIN_API_KEY=super-secret-admin-key-change-me
+  ```
 
-GET
-/health
-Проверка работоспособности сервиса
+  GET-методы (список, карточка, поиск, фильтры) — публичные.
 
-## Swagger документация
+## Основные эндпоинты  
 
-Интерактивная документация доступна по адресу:
-http://localhost:8080/swagger/index.html
+Метод,Эндпоинт,Описание
+GET,/api/v1/minerals,Список минералов + фильтры
+GET,/api/v1/minerals/{slug},Полная карточка минерала
+POST,/api/v1/minerals,Создание (только админ)
+PUT,/api/v1/minerals/{slug},Обновление (только админ)
+DELETE,/api/v1/minerals/{slug},Удаление (только админ)
+GET,/api/v1/search,Полнотекстовый поиск
+GET,/api/v1/filters,Доступные значения фильтров
+GET,/health,Проверка здоровья сервиса
 
 ## Команды разработки
 
 ```bash
-# Генерация Swagger
-swag init -g cmd/server/main.go --parseDependency --parseInternal
-
-# Сборка проекта
-go build ./...
-
-# Запуск тестов
-go test ./...
-
-# Форматирование кода
-go fmt ./...
+make db-up          # PostgreSQL
+make migrate-up     # Миграции
+make seed           # Сидирование данных
+make run            # Запуск сервера
+make swag           # Обновить Swagger документацию
+make build          # Сборка
 ```
 
-## Технологический стек
-Go + Gin
-PostgreSQL + sqlx
-Swagger (swaggo)
-Docker + docker-compose
+Технологический стек
+
+Backend: Go + Gin
+БД: PostgreSQL + sqlx + JSONB
+Документация: Swagger (swaggo)
+Миграции: golang-migrate
+Docker + Makefile
 
 ## Структура проекта
 
 ```text
 .
-├── cmd/server/main.go
+├── cmd/
+│   └── server/
 ├── internal/
 │   ├── config/
 │   ├── domain/
 │   ├── handler/
-│   ├── repository/
-│   └── middleware/
-├── docs/                    # Автогенерируемая Swagger документация
+│   ├── middleware/      # API Key защита
+│   └── repository/
+├── docs/                # Swagger
 ├── migrations/
-├── seeds/
+├── seeds/minerals/      # JSON-сиды
 ├── docker-compose.yml
-├── Makefile
-└── README.md
+└── Makefile
+
 ```
 
-# Samotsvety API
-
-Современный API для цифрового атласа самоцветов и минералов.
-
-## Основные возможности
-- Полноценный CRUD для минералов
-- Двуязычность (ru/en)
-- Два режима отображения (`normal` / `esoteric`)
-- Полнотекстовый поиск и фильтры
-- Чистая архитектура (Go + Gin + PostgreSQL)
-
-## Админские операции (POST / PUT / DELETE)
-
-**Все изменяющие операции защищены API Key.**
-
-### Как использовать:
-
-1. Добавьте ключ в `.env`:
-   ```env
-   ADMIN_API_KEY=super-secret-admin-key-change-me
-
-
-
-
-
-
-   Перезапустите сервер.
-Передавайте ключ в заголовке:
-
-Bash# Пример создания
-curl -X POST http://localhost:8080/api/v1/minerals \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: super-secret-admin-key-change-me" \
-  -d @seeds/minerals/malachite.json
-
-# Пример обновления
-curl -X PUT http://localhost:8080/api/v1/minerals/malachite \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: super-secret-admin-key-change-me" \
-  -d '{"safety_notes": "Новое описание безопасности..."}'
-Важно: GET-запросы (/minerals, /minerals/{slug}, /search, /filters) — публичные.
-Запуск проекта
-Bashdocker-compose up -d          # PostgreSQL
-make migrate-up
-make seed                     # наполнение тестовыми данными
-make run                      # запуск сервера
-Полезные команды
-
-make seed — применить сиды
-make migrate-up — миграции
-make build — сборка
