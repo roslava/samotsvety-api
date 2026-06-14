@@ -11,9 +11,9 @@ import (
 	"github.com/roslava/samotsvety-api/internal/repository"
 )
 
-// ListResponse — стандартизированный ответ для всех списковых методов
+// ListResponse — стандартизированный ответ для списков
 type ListResponse struct {
-	Data  []domain.Mineral `json:"data" example:"[{\"slug\":\"malachite\",\"name\":\"Малахит\"}]"`
+	Data  []domain.Mineral `json:"data" example:"[{\"slug\":\"malachite\"}]"`
 	Total int              `json:"total" example:"42"`
 	Page  int              `json:"page" example:"1"`
 	Limit int              `json:"limit" example:"20"`
@@ -35,7 +35,7 @@ func NewMineralHandler(repo repository.MineralRepository) *MineralHandler {
 // @Produce      json
 // @Param        lang         query  string   false  "Язык ответа"                  default=ru  enum(ru,en)
 // @Param        view         query  string   false  "Режим отображения"            default=normal enum(normal,esoteric)
-// @Param        rarity       query  string   false  "Редкость"                     enum(common,uncommon,rare,very_rare)
+// @Param        rarity       query  string   false  "Редкость"
 // @Param        mineral_group query string  false  "Группа минерала"
 // @Param        color        query  string   false  "Цвет"
 // @Param        russian_only query  bool     false  "Только российские"
@@ -95,7 +95,7 @@ func (h *MineralHandler) ListMinerals(c *gin.Context) {
 // @Tags         minerals
 // @Accept       json
 // @Produce      json
-// @Param        slug  path    string  true   "Slug минерала (malachite, charoite и т.д.)"
+// @Param        slug  path    string  true   "Slug минерала"
 // @Param        lang  query   string  false  "Язык"                  default=ru
 // @Param        view  query   string  false  "Режим"                 default=normal
 // @Success      200   {object}  domain.Mineral
@@ -117,11 +117,11 @@ func (h *MineralHandler) GetMineral(c *gin.Context) {
 
 // SearchMinerals godoc
 // @Summary      Поиск минералов
-// @Description  Полнотекстовый поиск по названию (на русском и английском), синонимам, lore и химической формуле
+// @Description  Полнотекстовый поиск по названию, синонимам, lore и химической формуле (работает на ru+en)
 // @Tags         search
 // @Accept       json
 // @Produce      json
-// @Param        q     query  string  true   "Поисковый запрос (малахит, malachite, Cu и др.)"
+// @Param        q     query  string  true   "Поисковый запрос"
 // @Param        lang  query  string  false  "Язык ответа"          default=ru
 // @Param        view  query  string  false  "Режим"                default=normal
 // @Param        limit query  int     false  "Лимит"                default=20
@@ -169,7 +169,7 @@ func (h *MineralHandler) SearchMinerals(c *gin.Context) {
 
 // GetFilters godoc
 // @Summary      Получить значения для фильтров
-// @Description  Возвращает списки доступных значений для построения фильтров на фронтенде (rarity, mineral_group, colors и т.д.)
+// @Description  Возвращает списки доступных значений для фронтенда
 // @Tags         filters
 // @Produce      json
 // @Success      200  {object} repository.FilterValues
