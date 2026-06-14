@@ -1,0 +1,394 @@
+definitions:
+  github_com_roslava_samotsvety-api_internal_domain.Esoteric:
+    properties:
+      chakras:
+        items:
+          type: string
+        type: array
+      energy_notes:
+        type: string
+      healing_interpretation:
+        type: string
+      metaphysical_properties:
+        items:
+          type: string
+        type: array
+      ritual_uses:
+        type: string
+      zodiac:
+        items:
+          type: string
+        type: array
+    type: object
+  github_com_roslava_samotsvety-api_internal_domain.GalleryImage:
+    properties:
+      description_en:
+        type: string
+      description_ru:
+        type: string
+      type:
+        description: specimen, polished, jewelry, micro и т.д.
+        type: string
+      url:
+        type: string
+    type: object
+  github_com_roslava_samotsvety-api_internal_domain.Hardness:
+    properties:
+      max:
+        maximum: 10
+        minimum: 1
+        type: number
+      min:
+        maximum: 10
+        minimum: 1
+        type: number
+      note:
+        type: string
+    required:
+    - max
+    - min
+    type: object
+  github_com_roslava_samotsvety-api_internal_domain.I18n:
+    properties:
+      en:
+        $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.LangData'
+      ru:
+        $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.LangData'
+    type: object
+  github_com_roslava_samotsvety-api_internal_domain.LangData:
+    properties:
+      color:
+        items:
+          type: string
+        type: array
+      color_description:
+        type: string
+      esoteric:
+        $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Esoteric'
+      lore:
+        type: string
+      name:
+        type: string
+      synonyms:
+        items:
+          type: string
+        type: array
+    required:
+    - lore
+    - name
+    type: object
+  github_com_roslava_samotsvety-api_internal_domain.Locality:
+    properties:
+      country:
+        type: string
+      description_en:
+        type: string
+      description_ru:
+        type: string
+      famous:
+        type: boolean
+      is_russian:
+        type: boolean
+      locality:
+        type: string
+      region:
+        type: string
+    type: object
+  github_com_roslava_samotsvety-api_internal_domain.Mineral:
+    properties:
+      created_at:
+        type: string
+      gallery:
+        items:
+          $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.GalleryImage'
+        type: array
+      i18n:
+        $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.I18n'
+      localities:
+        items:
+          $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Locality'
+        type: array
+      main_image_url:
+        type: string
+      related_minerals:
+        items:
+          type: string
+        type: array
+      safety_notes:
+        type: string
+      scientific:
+        $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Scientific'
+      slug:
+        type: string
+      updated_at:
+        type: string
+    required:
+    - slug
+    type: object
+  github_com_roslava_samotsvety-api_internal_domain.Rarity:
+    enum:
+    - common
+    - uncommon
+    - rare
+    - very_rare
+    type: string
+    x-enum-varnames:
+    - RarityCommon
+    - RarityUncommon
+    - RarityRare
+    - RarityVeryRare
+  github_com_roslava_samotsvety-api_internal_domain.Scientific:
+    properties:
+      chemical_formula:
+        type: string
+      cleavage:
+        type: string
+      crystal_habit:
+        type: string
+      crystal_system:
+        type: string
+      fracture:
+        type: string
+      hardness:
+        $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Hardness'
+      identification_tips:
+        type: string
+      ima_status:
+        type: string
+      luster:
+        type: string
+      mineral_group:
+        type: string
+      rarity:
+        allOf:
+        - $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Rarity'
+        enum:
+        - common
+        - uncommon
+        - rare
+        - very_rare
+      specific_gravity:
+        $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.SpecificGravity'
+      streak:
+        type: string
+      tenacity:
+        type: string
+      transparency:
+        type: string
+    required:
+    - chemical_formula
+    - crystal_system
+    - hardness
+    - luster
+    - mineral_group
+    - rarity
+    - specific_gravity
+    - streak
+    - transparency
+    type: object
+  github_com_roslava_samotsvety-api_internal_domain.SpecificGravity:
+    properties:
+      max:
+        minimum: 1
+        type: number
+      min:
+        minimum: 1
+        type: number
+    required:
+    - max
+    - min
+    type: object
+  github_com_roslava_samotsvety-api_internal_repository.FilterValues:
+    properties:
+      colors:
+        items:
+          type: string
+        type: array
+      countries:
+        items:
+          type: string
+        type: array
+      hardness_range:
+        properties:
+          max:
+            type: number
+          min:
+            type: number
+        type: object
+      mineral_groups:
+        items:
+          type: string
+        type: array
+      rarities:
+        items:
+          type: string
+        type: array
+    type: object
+  internal_handler.ErrorResponse:
+    properties:
+      code:
+        type: integer
+      error:
+        type: string
+      message:
+        type: string
+    type: object
+  internal_handler.ListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Mineral'
+        type: array
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+    type: object
+info:
+  contact: {}
+paths:
+  /api/v1/filters:
+    get:
+      description: Возвращает списки для фильтров фронтенда
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_repository.FilterValues'
+      summary: Получить доступные значения фильтров
+      tags:
+      - filters
+  /api/v1/minerals:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает список минералов с фильтрацией и пагинацией
+      parameters:
+      - default: ru
+        description: Язык (ru/en)
+        in: query
+        name: lang
+        type: string
+      - default: normal
+        description: Режим (normal/esoteric)
+        in: query
+        name: view
+        type: string
+      - description: Редкость
+        in: query
+        name: rarity
+        type: string
+      - description: Минимальная твёрдость
+        in: query
+        name: hardness_min
+        type: number
+      - description: Максимальная твёрдость
+        in: query
+        name: hardness_max
+        type: number
+      - description: Только российские
+        in: query
+        name: russian_only
+        type: boolean
+      - default: 20
+        description: Лимит
+        in: query
+        name: limit
+        type: integer
+      - default: 1
+        description: Страница
+        in: query
+        name: page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.ListResponse'
+      summary: Получить список минералов
+      tags:
+      - minerals
+  /api/v1/minerals/{slug}:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает полную карточку минерала
+      parameters:
+      - description: Slug минерала
+        in: path
+        name: slug
+        required: true
+        type: string
+      - default: ru
+        description: Язык (ru/en)
+        in: query
+        name: lang
+        type: string
+      - default: normal
+        description: Режим (normal/esoteric)
+        in: query
+        name: view
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Mineral'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      summary: Получить минерал по slug
+      tags:
+      - minerals
+  /api/v1/search:
+    get:
+      consumes:
+      - application/json
+      description: Полнотекстовый поиск по названию, синонимам, лору и химической
+        формуле
+      parameters:
+      - description: Поисковый запрос
+        in: query
+        name: q
+        required: true
+        type: string
+      - default: ru
+        description: Язык (ru/en)
+        in: query
+        name: lang
+        type: string
+      - default: normal
+        description: Режим (normal/esoteric)
+        in: query
+        name: view
+        type: string
+      - default: 20
+        description: Лимит
+        in: query
+        name: limit
+        type: integer
+      - default: 1
+        description: Страница
+        in: query
+        name: page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.ListResponse'
+      summary: Поиск минералов
+      tags:
+      - search
+swagger: "2.0"

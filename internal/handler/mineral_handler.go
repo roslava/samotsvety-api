@@ -11,6 +11,14 @@ import (
 	"github.com/roslava/samotsvety-api/internal/repository"
 )
 
+// ListResponse — стандартизированный ответ для всех списковых методов
+type ListResponse struct {
+	Data  []domain.Mineral `json:"data" example:"[{\"slug\":\"malachite\",\"name\":\"Малахит\"}]"`
+	Total int              `json:"total" example:"42"`
+	Page  int              `json:"page" example:"1"`
+	Limit int              `json:"limit" example:"20"`
+}
+
 type MineralHandler struct {
 	repo repository.MineralRepository
 }
@@ -21,19 +29,23 @@ func NewMineralHandler(repo repository.MineralRepository) *MineralHandler {
 
 // ListMinerals godoc
 // @Summary      Получить список минералов
-// @Description  Возвращает список минералов с фильтрацией и пагинацией
+// @Description  Возвращает список самоцветов с поддержкой фильтрации, сортировки и пагинации
 // @Tags         minerals
 // @Accept       json
 // @Produce      json
-// @Param        lang         query     string  false  "Язык (ru/en)"            default(ru)
-// @Param        view         query     string  false  "Режим (normal/esoteric)" default(normal)
-// @Param        rarity       query     string  false  "Редкость"
-// @Param        hardness_min query     number  false  "Минимальная твёрдость"
-// @Param        hardness_max query     number  false  "Максимальная твёрдость"
-// @Param        russian_only query     bool    false  "Только российские"
-// @Param        limit        query     int     false  "Лимит"                   default(20)
-// @Param        page         query     int     false  "Страница"                default(1)
-// @Success      200          {object}  ListResponse
+// @Param        lang         query  string   false  "Язык ответа"                  default=ru  enum(ru,en)
+// @Param        view         query  string   false  "Режим отображения"            default=normal enum(normal,esoteric)
+// @Param        rarity       query  string   false  "Редкость"                     enum(common,uncommon,rare,very_rare)
+// @Param        mineral_group query string  false  "Группа минерала"
+// @Param        color        query  string   false  "Цвет"
+// @Param        russian_only query  bool     false  "Только российские"
+// @Param        hardness_min query  number   false  "Минимальная твёрдость"
+// @Param        hardness_max query  number   false  "Максимальная твёрдость"
+// @Param        sort         query  string   false  "Сортировка"                   default=created_at enum(name,rarity,hardness,created_at)
+// @Param        order        query  string   false  "Порядок сортировки"           default=desc    enum(asc,desc)
+// @Param        limit        query  int      false  "Количество на странице"       default=20
+// @Param        page         query  int      false  "Страница"                     default=1
+// @Success      200  {object}  ListResponse
 // @Router       /api/v1/minerals [get]
 func (h *MineralHandler) ListMinerals(c *gin.Context) {
 	var filters domain.FilterParams
@@ -79,15 +91,15 @@ func (h *MineralHandler) ListMinerals(c *gin.Context) {
 
 // GetMineral godoc
 // @Summary      Получить минерал по slug
-// @Description  Возвращает полную карточку минерала
+// @Description  Возвращает полную детальную карточку самоцвета
 // @Tags         minerals
 // @Accept       json
 // @Produce      json
-// @Param        slug path      string true  "Slug минерала"
-// @Param        lang query     string false "Язык (ru/en)"            default(ru)
-// @Param        view query     string false "Режим (normal/esoteric)" default(normal)
-// @Success      200  {object}  domain.Mineral
-// @Failure      404  {object}  ErrorResponse
+// @Param        slug  path    string  true   "Slug минерала (malachite, charoite и т.д.)"
+// @Param        lang  query   string  false  "Язык"                  default=ru
+// @Param        view  query   string  false  "Режим"                 default=normal
+// @Success      200   {object}  domain.Mineral
+// @Failure      404   {object}  ErrorResponse
 // @Router       /api/v1/minerals/{slug} [get]
 func (h *MineralHandler) GetMineral(c *gin.Context) {
 	slug := c.Param("slug")
@@ -105,15 +117,15 @@ func (h *MineralHandler) GetMineral(c *gin.Context) {
 
 // SearchMinerals godoc
 // @Summary      Поиск минералов
-// @Description  Полнотекстовый поиск по названию, синонимам, лору и химической формуле
+// @Description  Полнотекстовый поиск по названию (на русском и английском), синонимам, lore и химической формуле
 // @Tags         search
 // @Accept       json
 // @Produce      json
-// @Param        q     query  string true   "Поисковый запрос"
-// @Param        lang  query  string false  "Язык (ru/en)"            default(ru)
-// @Param        view  query  string false  "Режим (normal/esoteric)" default(normal)
-// @Param        limit query  int    false  "Лимит"                   default(20)
-// @Param        page  query  int    false  "Страница"                default(1)
+// @Param        q     query  string  true   "Поисковый запрос (малахит, malachite, Cu и др.)"
+// @Param        lang  query  string  false  "Язык ответа"          default=ru
+// @Param        view  query  string  false  "Режим"                default=normal
+// @Param        limit query  int     false  "Лимит"                default=20
+// @Param        page  query  int     false  "Страница"             default=1
 // @Success      200   {object} ListResponse
 // @Router       /api/v1/search [get]
 func (h *MineralHandler) SearchMinerals(c *gin.Context) {
@@ -156,11 +168,11 @@ func (h *MineralHandler) SearchMinerals(c *gin.Context) {
 }
 
 // GetFilters godoc
-// @Summary      Получить доступные значения фильтров
-// @Description  Возвращает списки для фильтров фронтенда
+// @Summary      Получить значения для фильтров
+// @Description  Возвращает списки доступных значений для построения фильтров на фронтенде (rarity, mineral_group, colors и т.д.)
 // @Tags         filters
 // @Produce      json
-// @Success      200 {object} repository.FilterValues
+// @Success      200  {object} repository.FilterValues
 // @Router       /api/v1/filters [get]
 func (h *MineralHandler) GetFilters(c *gin.Context) {
 	filters, err := h.repo.GetFilters(c.Request.Context())

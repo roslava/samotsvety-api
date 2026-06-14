@@ -163,7 +163,7 @@
 
 ## Phase 6: Документация и Developer Experience
 
-- [ ] **6.1** Подключить `swaggo/swag`
+- [x] **6.1** Подключить `swaggo/swag`
   - Добавить Swagger-комментарии к хендлерам
   - Сгенерировать `docs/` (swagger.json + UI)
   - Доступ к Swagger UI по `/swagger/index.html`
