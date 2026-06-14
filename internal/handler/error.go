@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 )
 
 // ErrorResponse — стандартный формат ошибок API
@@ -37,4 +39,30 @@ func RespondBadRequest(c *gin.Context, message string) {
 
 func RespondInternalError(c *gin.Context, message string) {
 	NewErrorResponse(c, http.StatusInternalServerError, "internal_error", message)
+}
+
+// RespondValidationError — возвращает структурированные ошибки валидации
+func RespondValidationError(c *gin.Context, err error) {
+	var validationErrors validator.ValidationErrors
+	if errors.As(err, &validationErrors) {
+		details := make([]gin.H, 0, len(validationErrors))
+		for _, fieldErr := range validationErrors {
+			details = append(details, gin.H{
+				"field": fieldErr.Field(),
+				"tag":   fieldErr.Tag(),
+				"value": fieldErr.Value(),
+			})
+		}
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_failed",
+			"message": "Ошибка валидации входных данных",
+			"details": details,
+			"code":    http.StatusBadRequest,
+		})
+		return
+	}
+
+	// Если это не ошибка валидатора — возвращаем обычный bad request
+	RespondBadRequest(c, err.Error())
 }
