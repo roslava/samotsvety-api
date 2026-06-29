@@ -13,7 +13,7 @@ func NewRouter(repo repository.MineralRepository) *gin.Engine {
 	// Middleware
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
-	router.Use(CORS())
+	router.Use(middleware.CORS())
 
 	mineralHandler := NewMineralHandler(repo)
 
