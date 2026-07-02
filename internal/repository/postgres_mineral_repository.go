@@ -271,11 +271,9 @@ func (row mineralRow) toMineral() *domain.Mineral {
 }
 
 func (r *PostgresMineralRepository) applyLangFilter(mineral *domain.Mineral, lang string) {
-	if lang == "en" {
-		mineral.I18n = domain.I18n{En: mineral.I18n.En}
-	} else {
-		mineral.I18n = domain.I18n{Ru: mineral.I18n.Ru}
-	}
+	// Keep both languages, just mark which one to use on frontend
+	// The frontend will handle displaying only the requested language
+	// No need to filter here - let the frontend decide
 }
 
 func (r *PostgresMineralRepository) applyViewFilter(mineral *domain.Mineral, view string) {

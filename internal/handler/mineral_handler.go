@@ -72,9 +72,7 @@ func (h *MineralHandler) ListMinerals(c *gin.Context) {
 	if req.Lang == "" {
 		req.Lang = "ru"
 	}
-	if req.View == "" {
-		req.View = "normal"
-	}
+	// Don't set default view - empty view means include all data
 
 	filters := domain.FilterParams{
 		Page:        req.Page,
@@ -126,7 +124,7 @@ func (h *MineralHandler) ListMinerals(c *gin.Context) {
 func (h *MineralHandler) GetMineral(c *gin.Context) {
 	slug := c.Param("slug")
 	lang := c.DefaultQuery("lang", "ru")
-	view := c.DefaultQuery("view", "normal")
+	view := c.Query("view") // Don't set default - empty view means include all data
 
 	mineral, err := h.repo.GetBySlug(c.Request.Context(), slug, lang, view)
 	if err != nil {
@@ -153,7 +151,7 @@ func (h *MineralHandler) GetMineral(c *gin.Context) {
 func (h *MineralHandler) SearchMinerals(c *gin.Context) {
 	q := c.Query("q")
 	lang := c.DefaultQuery("lang", "ru")
-	view := c.DefaultQuery("view", "normal")
+	view := c.Query("view") // Don't set default - empty view means include all data
 
 	limitStr := c.DefaultQuery("limit", "20")
 	pageStr := c.DefaultQuery("page", "1")
