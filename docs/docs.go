@@ -50,15 +50,64 @@ const docTemplate = `{
                 "summary": "Получить список минералов",
                 "parameters": [
                     {
+                        "type": "integer",
+                        "description": "Номер страницы",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "type": "integer",
+                        "description": "Количество на странице",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "created_at",
+                            "name",
+                            "rarity",
+                            "hardness"
+                        ],
                         "type": "string",
-                        "description": "Язык ответа",
+                        "description": "Сортировка",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "description": "Порядок",
+                        "name": "order",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "ru",
+                            "en"
+                        ],
+                        "type": "string",
+                        "description": "Язык",
                         "name": "lang",
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "normal",
+                            "esoteric"
+                        ],
                         "type": "string",
-                        "description": "Режим отображения",
+                        "description": "Режим",
                         "name": "view",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Только российские",
+                        "name": "russian_only",
                         "in": "query"
                     },
                     {
@@ -69,7 +118,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Группа минерала",
+                        "description": "Группа",
                         "name": "mineral_group",
                         "in": "query"
                     },
@@ -77,12 +126,6 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Цвет",
                         "name": "color",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Только российские",
-                        "name": "russian_only",
                         "in": "query"
                     },
                     {
@@ -95,30 +138,6 @@ const docTemplate = `{
                         "type": "number",
                         "description": "Максимальная твёрдость",
                         "name": "hardness_max",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Сортировка",
-                        "name": "sort",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Порядок сортировки",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Количество на странице",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Страница",
-                        "name": "page",
                         "in": "query"
                     }
                 ],
@@ -387,6 +406,21 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "github_com_roslava_samotsvety-api_internal_domain.EntityType": {
+            "type": "string",
+            "enum": [
+                "mineral",
+                "rock",
+                "gem_variety",
+                "organic"
+            ],
+            "x-enum-varnames": [
+                "TypeMineral",
+                "TypeRock",
+                "TypeGemVariety",
+                "TypeOrganic"
+            ]
+        },
         "github_com_roslava_samotsvety-api_internal_domain.Esoteric": {
             "type": "object",
             "properties": {
@@ -429,7 +463,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "type": {
-                    "description": "specimen, polished, jewelry, micro и т.д.",
                     "type": "string"
                 },
                 "url": {
@@ -532,7 +565,8 @@ const docTemplate = `{
         "github_com_roslava_samotsvety-api_internal_domain.Mineral": {
             "type": "object",
             "required": [
-                "slug"
+                "slug",
+                "type"
             ],
             "properties": {
                 "created_at": {
@@ -571,6 +605,23 @@ const docTemplate = `{
                 "slug": {
                     "type": "string"
                 },
+                "thumbnail_url": {
+                    "description": "новое",
+                    "type": "string"
+                },
+                "type": {
+                    "enum": [
+                        "mineral",
+                        "rock",
+                        "gem_variety",
+                        "organic"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.EntityType"
+                        }
+                    ]
+                },
                 "updated_at": {
                     "type": "string"
                 }
@@ -594,8 +645,6 @@ const docTemplate = `{
         "github_com_roslava_samotsvety-api_internal_domain.Scientific": {
             "type": "object",
             "required": [
-                "chemical_formula",
-                "crystal_system",
                 "hardness",
                 "luster",
                 "mineral_group",
@@ -606,15 +655,21 @@ const docTemplate = `{
             ],
             "properties": {
                 "chemical_formula": {
+                    "description": "ослаблена",
                     "type": "string"
                 },
                 "cleavage": {
+                    "type": "string"
+                },
+                "composition": {
+                    "description": "новое",
                     "type": "string"
                 },
                 "crystal_habit": {
                     "type": "string"
                 },
                 "crystal_system": {
+                    "description": "ослаблена",
                     "type": "string"
                 },
                 "fracture": {
@@ -635,6 +690,13 @@ const docTemplate = `{
                 "mineral_group": {
                     "type": "string"
                 },
+                "phenomena": {
+                    "description": "новое",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "rarity": {
                     "enum": [
                         "common",
@@ -647,6 +709,10 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.Rarity"
                         }
                     ]
+                },
+                "rock_type": {
+                    "description": "новое",
+                    "type": "string"
                 },
                 "specific_gravity": {
                     "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.SpecificGravity"

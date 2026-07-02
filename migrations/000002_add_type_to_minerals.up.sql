@@ -7,3 +7,6 @@ CREATE INDEX IF NOT EXISTS idx_minerals_type ON minerals(type);
 
 -- Optional: backfill for existing records
 UPDATE minerals SET type = 'mineral' WHERE type IS NULL;
+
+ALTER TABLE minerals 
+ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;

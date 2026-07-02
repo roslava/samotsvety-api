@@ -1,4 +1,16 @@
 definitions:
+  github_com_roslava_samotsvety-api_internal_domain.EntityType:
+    enum:
+    - mineral
+    - rock
+    - gem_variety
+    - organic
+    type: string
+    x-enum-varnames:
+    - TypeMineral
+    - TypeRock
+    - TypeGemVariety
+    - TypeOrganic
   github_com_roslava_samotsvety-api_internal_domain.Esoteric:
     properties:
       chakras:
@@ -27,7 +39,6 @@ definitions:
       description_ru:
         type: string
       type:
-        description: specimen, polished, jewelry, micro и т.д.
         type: string
       url:
         type: string
@@ -120,10 +131,22 @@ definitions:
         $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Scientific'
       slug:
         type: string
+      thumbnail_url:
+        description: новое
+        type: string
+      type:
+        allOf:
+        - $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.EntityType'
+        enum:
+        - mineral
+        - rock
+        - gem_variety
+        - organic
       updated_at:
         type: string
     required:
     - slug
+    - type
     type: object
   github_com_roslava_samotsvety-api_internal_domain.Rarity:
     enum:
@@ -140,12 +163,17 @@ definitions:
   github_com_roslava_samotsvety-api_internal_domain.Scientific:
     properties:
       chemical_formula:
+        description: ослаблена
         type: string
       cleavage:
+        type: string
+      composition:
+        description: новое
         type: string
       crystal_habit:
         type: string
       crystal_system:
+        description: ослаблена
         type: string
       fracture:
         type: string
@@ -159,6 +187,11 @@ definitions:
         type: string
       mineral_group:
         type: string
+      phenomena:
+        description: новое
+        items:
+          type: string
+        type: array
       rarity:
         allOf:
         - $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Rarity'
@@ -167,6 +200,9 @@ definitions:
         - uncommon
         - rare
         - very_rare
+      rock_type:
+        description: новое
+        type: string
       specific_gravity:
         $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.SpecificGravity'
       streak:
@@ -176,8 +212,6 @@ definitions:
       transparency:
         type: string
     required:
-    - chemical_formula
-    - crystal_system
     - hardness
     - luster
     - mineral_group
@@ -326,19 +360,54 @@ paths:
       description: Возвращает список самоцветов с поддержкой фильтрации, сортировки
         и пагинации
       parameters:
-      - description: Язык ответа
+      - description: Номер страницы
+        in: query
+        name: page
+        type: integer
+      - description: Количество на странице
+        in: query
+        maximum: 100
+        name: limit
+        type: integer
+      - description: Сортировка
+        enum:
+        - created_at
+        - name
+        - rarity
+        - hardness
+        in: query
+        name: sort
+        type: string
+      - description: Порядок
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      - description: Язык
+        enum:
+        - ru
+        - en
         in: query
         name: lang
         type: string
-      - description: Режим отображения
+      - description: Режим
+        enum:
+        - normal
+        - esoteric
         in: query
         name: view
         type: string
+      - description: Только российские
+        in: query
+        name: russian_only
+        type: boolean
       - description: Редкость
         in: query
         name: rarity
         type: string
-      - description: Группа минерала
+      - description: Группа
         in: query
         name: mineral_group
         type: string
@@ -346,10 +415,6 @@ paths:
         in: query
         name: color
         type: string
-      - description: Только российские
-        in: query
-        name: russian_only
-        type: boolean
       - description: Минимальная твёрдость
         in: query
         name: hardness_min
@@ -358,22 +423,6 @@ paths:
         in: query
         name: hardness_max
         type: number
-      - description: Сортировка
-        in: query
-        name: sort
-        type: string
-      - description: Порядок сортировки
-        in: query
-        name: order
-        type: string
-      - description: Количество на странице
-        in: query
-        name: limit
-        type: integer
-      - description: Страница
-        in: query
-        name: page
-        type: integer
       produces:
       - application/json
       responses:
