@@ -40,9 +40,7 @@ func (r *PostgresMineralRepository) GetBySlug(ctx context.Context, slug, lang, v
 	if lang == "" {
 		lang = "ru"
 	}
-	if view == "" {
-		view = "normal"
-	}
+	// Don't set a default view - allow all data by default
 
 	r.applyLangFilter(mineral, lang)
 	r.applyViewFilter(mineral, view)
@@ -60,9 +58,7 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 	if filters.Lang == "" {
 		filters.Lang = "ru"
 	}
-	if filters.View == "" {
-		filters.View = "normal"
-	}
+	// Don't set a default view - allow all data by default
 	if filters.Order == "" {
 		filters.Order = "desc"
 	}
@@ -283,18 +279,20 @@ func (r *PostgresMineralRepository) applyLangFilter(mineral *domain.Mineral, lan
 }
 
 func (r *PostgresMineralRepository) applyViewFilter(mineral *domain.Mineral, view string) {
+	// Only remove esoteric if explicitly requested via view="normal"
 	if view == "normal" {
-		if mineral.I18n.Ru.Name != "" {
+		if mineral.I18n.Ru.Esoteric != nil {
 			ru := mineral.I18n.Ru
 			ru.Esoteric = nil
 			mineral.I18n.Ru = ru
 		}
-		if mineral.I18n.En.Name != "" {
+		if mineral.I18n.En.Esoteric != nil {
 			en := mineral.I18n.En
 			en.Esoteric = nil
 			mineral.I18n.En = en
 		}
 	}
+	// For empty view or "esoteric" — keep all data as is
 }
 
 func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, view string, limit, offset int) ([]domain.Mineral, int, error) {
@@ -304,9 +302,7 @@ func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, vie
 	if lang == "" {
 		lang = "ru"
 	}
-	if view == "" {
-		view = "normal"
-	}
+	// Don't set a default view - allow all data by default
 	if limit == 0 {
 		limit = 20
 	}

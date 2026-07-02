@@ -276,7 +276,7 @@ func (h *MineralHandler) UpdateMineral(c *gin.Context) {
 	}
 
 	// Получаем текущий минерал
-	mineral, err := h.repo.GetBySlug(c.Request.Context(), oldSlug, "ru", "normal")
+	mineral, err := h.repo.GetBySlug(c.Request.Context(), oldSlug, "ru", "")
 	if err != nil {
 		RespondNotFound(c, "Минерал не найден")
 		return
