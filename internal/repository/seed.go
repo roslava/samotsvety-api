@@ -33,24 +33,35 @@ func SeedMinerals(db *sqlx.DB, seedDir string) error {
 			return fmt.Errorf("failed to unmarshal %s: %w", path, err)
 		}
 
+		// Устанавливаем type, если не указан
+		if mineral.Type == "" {
+			mineral.Type = domain.TypeMineral
+		}
+
 		scientificJSON, _ := json.Marshal(mineral.Scientific)
 		i18nJSON, _ := json.Marshal(mineral.I18n)
 		localitiesJSON, _ := json.Marshal(mineral.Localities)
 		galleryJSON, _ := json.Marshal(mineral.Gallery)
 
-		// Для TEXT[] используем правильный формат
 		related := mineral.RelatedMinerals
 		if related == nil {
 			related = []string{}
 		}
 
 		query := `
-			INSERT INTO minerals (slug, scientific, i18n, main_image_url, safety_notes, localities, gallery, related_minerals, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+			INSERT INTO minerals (
+				slug, type, scientific, i18n, main_image_url, thumbnail_url, 
+				safety_notes, localities, gallery, related_minerals, 
+				created_at, updated_at
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
 			ON CONFLICT (slug) DO UPDATE 
-			SET scientific = EXCLUDED.scientific,
+			SET 
+				type = EXCLUDED.type,
+				scientific = EXCLUDED.scientific,
 				i18n = EXCLUDED.i18n,
 				main_image_url = EXCLUDED.main_image_url,
+				thumbnail_url = EXCLUDED.thumbnail_url,
 				safety_notes = EXCLUDED.safety_notes,
 				localities = EXCLUDED.localities,
 				gallery = EXCLUDED.gallery,
@@ -60,19 +71,21 @@ func SeedMinerals(db *sqlx.DB, seedDir string) error {
 
 		_, err = db.Exec(query,
 			mineral.Slug,
+			mineral.Type,
 			scientificJSON,
 			i18nJSON,
 			mineral.MainImageURL,
+			mineral.ThumbnailURL,
 			mineral.SafetyNotes,
 			localitiesJSON,
 			galleryJSON,
-			related, // <- это TEXT[]
+			related,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to seed %s: %w", mineral.Slug, err)
 		}
 
-		fmt.Printf("✅ Seeded: %s\n", mineral.Slug)
+		fmt.Printf("✅ Seeded: %s (type: %s)\n", mineral.Slug, mineral.Type)
 	}
 
 	return nil
