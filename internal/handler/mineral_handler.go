@@ -226,12 +226,20 @@ func (h *MineralHandler) CreateMineral(c *gin.Context) {
 
 	now := time.Now().UTC()
 
+	// Convert ThumbnailURL to pointer
+	thumbnailURL := (*string)(nil)
+	if req.ThumbnailURL != "" {
+		thumbnailURL = &req.ThumbnailURL
+	}
+
 	mineral := &domain.Mineral{
 		Slug:            req.Slug,
+		Type:            req.Type,
 		Scientific:      req.Scientific,
 		I18n:            req.I18n,
 		Localities:      req.Localities,
 		MainImageURL:    req.MainImageURL,
+		ThumbnailURL:    thumbnailURL,
 		Gallery:         req.Gallery,
 		SafetyNotes:     req.SafetyNotes,
 		RelatedMinerals: req.RelatedMinerals,
@@ -284,6 +292,9 @@ func (h *MineralHandler) UpdateMineral(c *gin.Context) {
 	if req.Slug != nil && *req.Slug != "" {
 		mineral.Slug = *req.Slug
 	}
+	if req.Type != nil && *req.Type != "" {
+		mineral.Type = *req.Type
+	}
 	if req.Scientific != nil {
 		mineral.Scientific = *req.Scientific
 	}
@@ -295,6 +306,9 @@ func (h *MineralHandler) UpdateMineral(c *gin.Context) {
 	}
 	if req.MainImageURL != nil {
 		mineral.MainImageURL = *req.MainImageURL
+	}
+	if req.ThumbnailURL != nil {
+		mineral.ThumbnailURL = req.ThumbnailURL
 	}
 	if req.Gallery != nil {
 		mineral.Gallery = *req.Gallery
