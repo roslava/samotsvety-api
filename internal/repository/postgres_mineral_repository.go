@@ -24,7 +24,7 @@ func NewPostgresMineralRepository(db *sqlx.DB) *PostgresMineralRepository {
 
 func (r *PostgresMineralRepository) GetBySlug(ctx context.Context, slug, lang, view string) (*domain.Mineral, error) {
 	var m mineralRow
-	query := `SELECT slug, scientific, i18n, main_image_url, safety_notes, localities, gallery, related_minerals, created_at, updated_at 
+	query := `SELECT slug, scientific, i18n, main_image_url, thumbnail_url, safety_notes, localities, gallery, related_minerals, created_at, updated_at 
 	          FROM minerals WHERE slug = $1`
 
 	err := r.db.GetContext(ctx, &m, query, slug)
@@ -51,7 +51,6 @@ func (r *PostgresMineralRepository) GetBySlug(ctx context.Context, slug, lang, v
 }
 
 func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.FilterParams) ([]domain.Mineral, int, error) {
-	// ... (твой существующий код List без изменений)
 	if filters.Limit == 0 {
 		filters.Limit = 20
 	}
@@ -141,7 +140,7 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 	}
 
 	query := fmt.Sprintf(`
-		SELECT slug, scientific, i18n, main_image_url, safety_notes,
+		SELECT slug, scientific, i18n, main_image_url, thumbnail_url, safety_notes,
 		       localities, gallery, related_minerals, created_at, updated_at
 		FROM minerals
 		%s
@@ -173,11 +172,7 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 	return results, total, nil
 }
 
-// ==================== CREATE (Phase 7) ====================
-// Create создаёт новый минерал
-// Create создаёт новый минерал с проверкой уникальности slug
 func (r *PostgresMineralRepository) Create(ctx context.Context, mineral *domain.Mineral) error {
-	// Проверка, что slug ещё не занят
 	var count int
 	err := r.db.GetContext(ctx, &count, "SELECT COUNT(*) FROM minerals WHERE slug = $1", mineral.Slug)
 	if err != nil {
@@ -199,6 +194,7 @@ func (r *PostgresMineralRepository) Create(ctx context.Context, mineral *domain.
 			i18n, 
 			localities, 
 			main_image_url, 
+			thumbnail_url,
 			gallery, 
 			safety_notes, 
 			related_minerals,
@@ -207,7 +203,7 @@ func (r *PostgresMineralRepository) Create(ctx context.Context, mineral *domain.
 		) VALUES (
 			$1, $2, $3, $4, 
 			$5, $6, $7, $8,
-			$9, $10
+			$9, $10, $11
 		)
 	`
 
@@ -217,6 +213,7 @@ func (r *PostgresMineralRepository) Create(ctx context.Context, mineral *domain.
 		i18nJSON,
 		localitiesJSON,
 		mineral.MainImageURL,
+		mineral.ThumbnailURL,
 		galleryJSON,
 		mineral.SafetyNotes,
 		pq.StringArray(mineral.RelatedMinerals),
@@ -236,6 +233,7 @@ type mineralRow struct {
 	Scientific      []byte         `db:"scientific"`
 	I18n            []byte         `db:"i18n"`
 	MainImageURL    string         `db:"main_image_url"`
+	ThumbnailURL    string         `db:"thumbnail_url"`
 	SafetyNotes     string         `db:"safety_notes"`
 	Localities      []byte         `db:"localities"`
 	Gallery         []byte         `db:"gallery"`
@@ -266,6 +264,7 @@ func (row mineralRow) toMineral() *domain.Mineral {
 		Scientific:      scientific,
 		I18n:            i18n,
 		MainImageURL:    row.MainImageURL,
+		ThumbnailURL:    row.ThumbnailURL,
 		SafetyNotes:     row.SafetyNotes,
 		Localities:      localities,
 		Gallery:         gallery,
@@ -298,9 +297,7 @@ func (r *PostgresMineralRepository) applyViewFilter(mineral *domain.Mineral, vie
 	}
 }
 
-// ==================== SEARCH ====================
 func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, view string, limit, offset int) ([]domain.Mineral, int, error) {
-	// ... (твой существующий код Search без изменений)
 	if query == "" {
 		return []domain.Mineral{}, 0, nil
 	}
@@ -331,7 +328,7 @@ func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, vie
 	`
 
 	querySQL := fmt.Sprintf(`
-		SELECT slug, scientific, i18n, main_image_url, safety_notes,
+		SELECT slug, scientific, i18n, main_image_url, thumbnail_url, safety_notes,
 		       localities, gallery, related_minerals, created_at, updated_at
 		FROM minerals
 		WHERE %s
@@ -361,9 +358,7 @@ func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, vie
 	return results, total, nil
 }
 
-// ==================== GET FILTERS ====================
 func (r *PostgresMineralRepository) GetFilters(ctx context.Context) (*FilterValues, error) {
-	// ... (твой существующий код GetFilters без изменений)
 	fv := &FilterValues{}
 
 	// Rarity
@@ -407,7 +402,7 @@ func (r *PostgresMineralRepository) GetFilters(ctx context.Context) (*FilterValu
 	fv.HardnessRange.Min = hardness.Min
 	fv.HardnessRange.Max = hardness.Max
 
-	// Colors (из русского языка)
+	// Colors
 	var colors []string
 	if err := r.db.SelectContext(ctx, &colors, `
 		SELECT DISTINCT jsonb_array_elements_text(i18n->'ru'->'color')
@@ -434,9 +429,7 @@ func (r *PostgresMineralRepository) GetFilters(ctx context.Context) (*FilterValu
 	return fv, nil
 }
 
-// Update обновляет существующий минерал (с поддержкой смены slug)
 func (r *PostgresMineralRepository) Update(ctx context.Context, oldSlug string, mineral *domain.Mineral) error {
-	// Если slug меняется — проверяем уникальность
 	if mineral.Slug != oldSlug {
 		var count int
 		err := r.db.GetContext(ctx, &count, "SELECT COUNT(*) FROM minerals WHERE slug = $1", mineral.Slug)
@@ -461,11 +454,12 @@ func (r *PostgresMineralRepository) Update(ctx context.Context, oldSlug string, 
 			i18n = $3,
 			localities = $4,
 			main_image_url = $5,
-			gallery = $6,
-			safety_notes = $7,
-			related_minerals = $8,
+			thumbnail_url = $6,
+			gallery = $7,
+			safety_notes = $8,
+			related_minerals = $9,
 			updated_at = NOW()
-		WHERE slug = $9`
+		WHERE slug = $10`
 
 	_, err := r.db.ExecContext(ctx, query,
 		mineral.Slug,
@@ -473,6 +467,7 @@ func (r *PostgresMineralRepository) Update(ctx context.Context, oldSlug string, 
 		i18nJSON,
 		localitiesJSON,
 		mineral.MainImageURL,
+		mineral.ThumbnailURL,
 		galleryJSON,
 		mineral.SafetyNotes,
 		pq.StringArray(mineral.RelatedMinerals),
@@ -486,7 +481,6 @@ func (r *PostgresMineralRepository) Update(ctx context.Context, oldSlug string, 
 	return nil
 }
 
-// Delete удаляет минерал по slug
 func (r *PostgresMineralRepository) Delete(ctx context.Context, slug string) error {
 	result, err := r.db.ExecContext(ctx, "DELETE FROM minerals WHERE slug = $1", slug)
 	if err != nil {
