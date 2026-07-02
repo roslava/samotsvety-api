@@ -233,7 +233,7 @@ type mineralRow struct {
 	Scientific      []byte         `db:"scientific"`
 	I18n            []byte         `db:"i18n"`
 	MainImageURL    string         `db:"main_image_url"`
-	ThumbnailURL    string         `db:"thumbnail_url"`
+	ThumbnailURL    *string        `db:"thumbnail_url"` // ← измени на *string
 	SafetyNotes     string         `db:"safety_notes"`
 	Localities      []byte         `db:"localities"`
 	Gallery         []byte         `db:"gallery"`

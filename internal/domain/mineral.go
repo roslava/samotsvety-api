@@ -24,7 +24,7 @@ type GemEntity struct {
 	I18n            I18n           `json:"i18n"`
 	Localities      []Locality     `json:"localities,omitempty"`
 	MainImageURL    string         `json:"main_image_url,omitempty"`
-	ThumbnailURL    string         `json:"thumbnail_url,omitempty"` // новое
+	ThumbnailURL    *string        `json:"thumbnail_url,omitempty"` // новое
 	Gallery         []GalleryImage `json:"gallery,omitempty"`
 	SafetyNotes     string         `json:"safety_notes,omitempty"`
 	RelatedMinerals []string       `json:"related_minerals,omitempty"`
