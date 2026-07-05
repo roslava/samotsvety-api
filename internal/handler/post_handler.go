@@ -4,9 +4,12 @@ package handler
 import (
 	"log/slog"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/roslava/samotsvety-api/internal/domain"
 	"github.com/roslava/samotsvety-api/internal/repository"
 )
 
@@ -29,7 +32,7 @@ func NewPostHandler(repo repository.PostRepository) *PostHandler {
 // @Param        tag        query  string  false  "Тег"
 // @Param        gem_slug   query  string  false  "Связанный камень"
 // @Param        published  query  bool    false  "Только опубликованные"
-// @Success      200  {object}  ListResponse
+// @Success      200  {object}  gin.H
 // @Router       /api/v1/posts [get]
 func (h *PostHandler) ListPosts(c *gin.Context) {
 	var req ListPostsRequest
@@ -84,7 +87,56 @@ func (h *PostHandler) GetPost(c *gin.Context) {
 	c.JSON(http.StatusOK, post)
 }
 
-// Остальные методы (Create, Update, Delete) — позже, с защитой API Key
+// CreatePost godoc
+// @Summary      Создать новую статью
+// @Description  Создаёт новую статью (только админ)
+// @Tags         posts
+// @Accept       json
+// @Produce      json
+// @Param        post body handler.CreatePostRequest true "Данные статьи"
+// @Success      201  {object}  domain.Post
+// @Failure      400  {object}  handler.ErrorResponse
+// @Failure      409  {object}  handler.ErrorResponse "Slug уже существует"
+// @Router       /api/v1/posts [post]
+func (h *PostHandler) CreatePost(c *gin.Context) {
+	var req CreatePostRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		RespondValidationError(c, err)
+		return
+	}
+
+	now := time.Now().UTC()
+
+	post := &domain.Post{
+		Slug:        req.Slug,
+		Type:        req.Type,
+		TitleRu:     req.TitleRu,
+		TitleEn:     req.TitleEn,
+		ExcerptRu:   req.ExcerptRu,
+		ExcerptEn:   req.ExcerptEn,
+		ContentRu:   req.ContentRu,
+		ContentEn:   req.ContentEn,
+		CoverImage:  req.CoverImage,
+		GemSlugs:    req.GemSlugs,
+		Tags:        req.Tags,
+		PublishedAt: req.PublishedAt,
+		UpdatedAt:   now,
+		IsPublished: req.IsPublished,
+		Author:      req.Author,
+	}
+
+	if err := h.repo.Create(c.Request.Context(), post); err != nil {
+		if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate") {
+			RespondWithError(c, http.StatusConflict, "Статья с таким slug уже существует")
+			return
+		}
+		slog.Error("Failed to create post", "error", err, "slug", req.Slug)
+		RespondInternalError(c, "Не удалось создать статью")
+		return
+	}
+
+	c.JSON(http.StatusCreated, post)
+}
 
 type ListPostsRequest struct {
 	Page      int    `form:"page" validate:"min=1"`
@@ -93,4 +145,21 @@ type ListPostsRequest struct {
 	Tag       string `form:"tag"`
 	GemSlug   string `form:"gem_slug"`
 	Published bool   `form:"published"`
+}
+
+type CreatePostRequest struct {
+	Slug        string          `json:"slug" validate:"required"`
+	Type        domain.PostType `json:"type" validate:"required"`
+	TitleRu     string          `json:"title_ru" validate:"required"`
+	TitleEn     string          `json:"title_en" validate:"required"`
+	ExcerptRu   string          `json:"excerpt_ru"`
+	ExcerptEn   string          `json:"excerpt_en"`
+	ContentRu   string          `json:"content_ru"`
+	ContentEn   string          `json:"content_en"`
+	CoverImage  string          `json:"cover_image"`
+	GemSlugs    []string        `json:"gem_slugs"`
+	Tags        []string        `json:"tags"`
+	PublishedAt *time.Time      `json:"published_at"`
+	IsPublished bool            `json:"is_published"`
+	Author      string          `json:"author"`
 }

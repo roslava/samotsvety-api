@@ -1,0 +1,16 @@
+{
+  "slug": "malachite-history",
+  "type": "history",
+  "title_ru": "История уральского малахита",
+  "title_en": "History of Ural Malachite",
+  "excerpt_ru": "Как малахит стал символом Урала и камнерезного искусства России.",
+  "excerpt_en": "How malachite became a symbol of the Urals and Russian stone carving art.",
+  "content_ru": "# Малахит на Урале\n\nМалахит добывался на Урале с XVIII века...",
+  "content_en": "# Malachite in the Urals\n\nMalachite has been mined in the Urals since the 18th century...",
+  "cover_image": "https://cdn.samotsvety.com/images/posts/malachite-history.jpg",
+  "gem_slugs": ["malachite"],
+  "tags": ["урал", "история", "каменное-дело"],
+  "published_at": "2026-07-01T10:00:00Z",
+  "is_published": true,
+  "author": "roslava"
+}

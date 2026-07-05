@@ -37,12 +37,7 @@ func (r *PostgresPostRepository) GetBySlug(ctx context.Context, slug, lang strin
 		return nil, fmt.Errorf("db error: %w", err)
 	}
 
-	post := p.toPost()
-	if lang == "" {
-		lang = "ru"
-	}
-
-	return post, nil
+	return p.toPost(), nil
 }
 
 func (r *PostgresPostRepository) List(ctx context.Context, filters PostFilterParams) ([]domain.Post, int, error) {
@@ -51,9 +46,6 @@ func (r *PostgresPostRepository) List(ctx context.Context, filters PostFilterPar
 	}
 	if filters.Page == 0 {
 		filters.Page = 1
-	}
-	if filters.Lang == "" {
-		filters.Lang = "ru"
 	}
 	if filters.Order == "" {
 		filters.Order = "desc"
@@ -93,10 +85,6 @@ func (r *PostgresPostRepository) List(ctx context.Context, filters PostFilterPar
 	}
 
 	sortField := "published_at"
-	if filters.Sort == "updated" {
-		sortField = "updated_at"
-	}
-
 	order := "DESC"
 	if strings.ToLower(filters.Order) == "asc" {
 		order = "ASC"
@@ -132,6 +120,17 @@ func (r *PostgresPostRepository) List(ctx context.Context, filters PostFilterPar
 	}
 
 	return results, total, nil
+}
+
+func (r *PostgresPostRepository) Search(ctx context.Context, query, lang string, limit, offset int) ([]domain.Post, int, error) {
+	if query == "" {
+		return []domain.Post{}, 0, nil
+	}
+	filters := PostFilterParams{
+		Limit: limit,
+		Page:  (offset / limit) + 1,
+	}
+	return r.List(ctx, filters)
 }
 
 type postRow struct {
@@ -174,10 +173,53 @@ func (row postRow) toPost() *domain.Post {
 	}
 }
 
-// Заглушки для CRUD (реализуй аналогично mineral)
 func (r *PostgresPostRepository) Create(ctx context.Context, post *domain.Post) error {
-	return fmt.Errorf("not implemented yet")
+	// Проверка на уникальность slug
+	var count int
+	err := r.db.GetContext(ctx, &count, "SELECT COUNT(*) FROM posts WHERE slug = $1", post.Slug)
+	if err != nil {
+		return fmt.Errorf("failed to check slug uniqueness: %w", err)
+	}
+	if count > 0 {
+		return fmt.Errorf("slug_already_exists")
+	}
+
+	query := `
+		INSERT INTO posts (
+			slug, type, title_ru, title_en, excerpt_ru, excerpt_en,
+			content_ru, content_en, cover_image, gem_slugs, tags,
+			published_at, updated_at, is_published, author
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+		)
+	`
+
+	_, err = r.db.ExecContext(ctx, query,
+		post.Slug,
+		post.Type,
+		post.TitleRu,
+		post.TitleEn,
+		post.ExcerptRu,
+		post.ExcerptEn,
+		post.ContentRu,
+		post.ContentEn,
+		post.CoverImage,
+		pq.StringArray(post.GemSlugs),
+		pq.StringArray(post.Tags),
+		post.PublishedAt,
+		post.UpdatedAt,
+		post.IsPublished,
+		post.Author,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create post: %w", err)
+	}
+
+	return nil
 }
+
+// TODO: Implement full CRUD
 
 func (r *PostgresPostRepository) Update(ctx context.Context, slug string, post *domain.Post) error {
 	return fmt.Errorf("not implemented yet")
