@@ -55,11 +55,11 @@ func (h *PostHandler) ListPosts(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, ListResponse{
-		Data:  posts,
-		Total: total,
-		Page:  filters.Page,
-		Limit: filters.Limit,
+	c.JSON(http.StatusOK, gin.H{
+		"data":  posts,
+		"total": total,
+		"page":  filters.Page,
+		"limit": filters.Limit,
 	})
 }
 
