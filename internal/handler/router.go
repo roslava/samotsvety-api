@@ -7,7 +7,7 @@ import (
 	"github.com/roslava/samotsvety-api/internal/repository"
 )
 
-func NewRouter(repo repository.MineralRepository) *gin.Engine {
+func NewRouter(mineralRepo repository.MineralRepository, postRepo repository.PostRepository) *gin.Engine {
 	router := gin.Default()
 
 	// Middleware
@@ -15,7 +15,8 @@ func NewRouter(repo repository.MineralRepository) *gin.Engine {
 	router.Use(gin.Recovery())
 	router.Use(middleware.CORS())
 
-	mineralHandler := NewMineralHandler(repo)
+	mineralHandler := NewMineralHandler(mineralRepo)
+	postHandler := NewPostHandler(postRepo)
 
 	// API v1
 	v1 := router.Group("/api/v1")
@@ -34,6 +35,23 @@ func NewRouter(repo repository.MineralRepository) *gin.Engine {
 				admin.POST("", mineralHandler.CreateMineral)
 				admin.PUT("/:slug", mineralHandler.UpdateMineral)
 				admin.DELETE("/:slug", mineralHandler.DeleteMineral)
+			}
+		}
+
+		// === Посты / Статьи ===
+		posts := v1.Group("/posts")
+		{
+			// Публичные методы (чтение)
+			posts.GET("", postHandler.ListPosts)
+			posts.GET("/:slug", postHandler.GetPost)
+
+			// === ЗАЩИЩЁННЫЕ АДМИНСКИЕ МЕТОДЫ ===
+			admin := posts.Group("")
+			admin.Use(middleware.APIKeyAuth())
+			{
+				// admin.POST("", postHandler.CreatePost)     // добавим позже
+				// admin.PUT("/:slug", postHandler.UpdatePost) // добавим позже
+				// admin.DELETE("/:slug", postHandler.DeletePost)
 			}
 		}
 
