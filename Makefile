@@ -1,4 +1,4 @@
-.PHONY: help build test run clean migrate-up migrate-down seed db-up db-down db-reset dev-install deps
+.PHONY: help build test run clean migrate-up migrate-down migrate-new seed db-up db-down db-reset dev-install deps
 
 # Load .env variables
 -include .env
@@ -18,6 +18,7 @@ help:
 	@echo "  make db-reset       Stop and remove PostgreSQL (⚠️  deletes data)"
 	@echo "  make migrate-up     Apply database migrations"
 	@echo "  make migrate-down   Rollback database migrations"
+	@echo "  make migrate-new    Create new migration files"
 	@echo ""
 	@echo "Other:"
 	@echo "  make seed           Seed the database with sample data"
@@ -69,6 +70,21 @@ migrate-down:
 	fi
 	@echo "Database URL: postgres://$(DB_USER):***@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=$(DB_SSLMODE)"
 	$(HOME)/go/bin/migrate -path migrations -database "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=$(DB_SSLMODE)" down
+
+# Create new migration
+migrate-new:
+	@if [ -z "$(NAME)" ]; then \
+		echo "Usage: make migrate-new NAME=add_posts_table"; \
+		exit 1; \
+	fi
+	@timestamp=$$(date +%Y%m%d%H%M%S); \
+	filename="migrations/$${timestamp}_$(NAME)"; \
+	touch $${filename}.up.sql; \
+	touch $${filename}.down.sql; \
+	echo "✅ Created:"; \
+	echo "   $${filename}.up.sql"; \
+	echo "   $${filename}.down.sql"; \
+	echo "Заполни их содержимым!"
 
 # Seed database
 seed:
