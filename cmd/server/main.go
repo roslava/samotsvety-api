@@ -44,11 +44,12 @@ func main() {
 	}
 	defer db.Close()
 
-	// Репозиторий
+	// Репозитории
 	mineralRepo := repository.NewPostgresMineralRepository(db)
+	postRepo := repository.NewPostgresPostRepository(db) // ← Добавили
 
 	// Роутер
-	router := handler.NewRouter(mineralRepo)
+	router := handler.NewRouter(mineralRepo, postRepo) // ← Обновили
 
 	// Swagger UI
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
