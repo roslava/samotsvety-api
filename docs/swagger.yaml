@@ -1,4 +1,7 @@
 definitions:
+  gin.H:
+    additionalProperties: {}
+    type: object
   github_com_roslava_samotsvety-api_internal_domain.EntityType:
     enum:
     - mineral
@@ -148,6 +151,73 @@ definitions:
     - slug
     - type
     type: object
+  github_com_roslava_samotsvety-api_internal_domain.Post:
+    properties:
+      author:
+        type: string
+      content_en:
+        type: string
+      content_ru:
+        description: Markdown или HTML
+        type: string
+      cover_image:
+        type: string
+      excerpt_en:
+        type: string
+      excerpt_ru:
+        type: string
+      gem_slugs:
+        description: Связанные самоцветы
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      is_published:
+        type: boolean
+      published_at:
+        type: string
+      slug:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title_en:
+        type: string
+      title_ru:
+        type: string
+      type:
+        allOf:
+        - $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.PostType'
+        enum:
+        - blog
+        - guide
+        - history
+        - esoteric
+        - review
+      updated_at:
+        type: string
+    required:
+    - slug
+    - title_en
+    - title_ru
+    - type
+    type: object
+  github_com_roslava_samotsvety-api_internal_domain.PostType:
+    enum:
+    - blog
+    - guide
+    - history
+    - esoteric
+    - review
+    type: string
+    x-enum-varnames:
+    - PostTypeBlog
+    - PostTypeGuide
+    - PostTypeHistory
+    - PostTypeEsoteric
+    - PostTypeReview
   github_com_roslava_samotsvety-api_internal_domain.Rarity:
     enum:
     - common
@@ -282,10 +352,61 @@ definitions:
         $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Scientific'
       slug:
         type: string
+      thumbnail_url:
+        type: string
+      type:
+        allOf:
+        - $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.EntityType'
+        enum:
+        - mineral
+        - rock
+        - gem_variety
+        - organic
     required:
     - i18n
     - scientific
     - slug
+    - type
+    type: object
+  internal_handler.CreatePostRequest:
+    properties:
+      author:
+        type: string
+      content_en:
+        type: string
+      content_ru:
+        type: string
+      cover_image:
+        type: string
+      excerpt_en:
+        type: string
+      excerpt_ru:
+        type: string
+      gem_slugs:
+        items:
+          type: string
+        type: array
+      is_published:
+        type: boolean
+      published_at:
+        type: string
+      slug:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title_en:
+        type: string
+      title_ru:
+        type: string
+      type:
+        $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.PostType'
+    required:
+    - slug
+    - title_en
+    - title_ru
+    - type
     type: object
   internal_handler.ErrorResponse:
     properties:
@@ -336,6 +457,51 @@ definitions:
         $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Scientific'
       slug:
         type: string
+      thumbnail_url:
+        type: string
+      type:
+        allOf:
+        - $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.EntityType'
+        enum:
+        - mineral
+        - rock
+        - gem_variety
+        - organic
+    type: object
+  internal_handler.UpdatePostRequest:
+    properties:
+      author:
+        type: string
+      content_en:
+        type: string
+      content_ru:
+        type: string
+      cover_image:
+        type: string
+      excerpt_en:
+        type: string
+      excerpt_ru:
+        type: string
+      gem_slugs:
+        items:
+          type: string
+        type: array
+      is_published:
+        type: boolean
+      published_at:
+        type: string
+      slug:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title_en:
+        type: string
+      title_ru:
+        type: string
+      type:
+        $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.PostType'
     type: object
 info:
   contact: {}
@@ -525,6 +691,147 @@ paths:
       summary: Получить минерал по slug
       tags:
       - minerals
+  /api/v1/posts:
+    get:
+      description: Список постов с фильтрацией и пагинацией
+      parameters:
+      - description: Страница
+        in: query
+        name: page
+        type: integer
+      - description: Лимит
+        in: query
+        name: limit
+        type: integer
+      - description: Тип (blog, guide...)
+        in: query
+        name: type
+        type: string
+      - description: Тег
+        in: query
+        name: tag
+        type: string
+      - description: Связанный камень
+        in: query
+        name: gem_slug
+        type: string
+      - description: Только опубликованные
+        in: query
+        name: published
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/gin.H'
+      summary: Получить список статей
+      tags:
+      - posts
+    post:
+      consumes:
+      - application/json
+      description: Создаёт новую статью (только админ)
+      parameters:
+      - description: Данные статьи
+        in: body
+        name: post
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.CreatePostRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Post'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "409":
+          description: Slug уже существует
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      summary: Создать новую статью
+      tags:
+      - posts
+  /api/v1/posts/{slug}:
+    delete:
+      parameters:
+      - description: Slug статьи
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      summary: Удалить статью
+      tags:
+      - posts
+    get:
+      parameters:
+      - description: Slug статьи
+        in: path
+        name: slug
+        required: true
+        type: string
+      - description: Язык
+        in: query
+        name: lang
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Post'
+      summary: Получить статью по slug
+      tags:
+      - posts
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Slug статьи
+        in: path
+        name: slug
+        required: true
+        type: string
+      - description: Данные для обновления
+        in: body
+        name: post
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.UpdatePostRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_roslava_samotsvety-api_internal_domain.Post'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      summary: Обновить статью
+      tags:
+      - posts
   /api/v1/search:
     get:
       consumes:

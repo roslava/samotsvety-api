@@ -279,6 +279,221 @@
                 }
             }
         },
+        "/api/v1/posts": {
+            "get": {
+                "description": "Список постов с фильтрацией и пагинацией",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "posts"
+                ],
+                "summary": "Получить список статей",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Страница",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Лимит",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Тип (blog, guide...)",
+                        "name": "type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Тег",
+                        "name": "tag",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Связанный камень",
+                        "name": "gem_slug",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Только опубликованные",
+                        "name": "published",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Создаёт новую статью (только админ)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "posts"
+                ],
+                "summary": "Создать новую статью",
+                "parameters": [
+                    {
+                        "description": "Данные статьи",
+                        "name": "post",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.CreatePostRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.Post"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Slug уже существует",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/posts/{slug}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "posts"
+                ],
+                "summary": "Получить статью по slug",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Slug статьи",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Язык",
+                        "name": "lang",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.Post"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "posts"
+                ],
+                "summary": "Обновить статью",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Slug статьи",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Данные для обновления",
+                        "name": "post",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.UpdatePostRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.Post"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "posts"
+                ],
+                "summary": "Удалить статью",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Slug статьи",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/search": {
             "get": {
                 "description": "Полнотекстовый поиск по названию, синонимам, lore и химической формуле (работает на ru+en)",
@@ -395,6 +610,10 @@
         }
     },
     "definitions": {
+        "gin.H": {
+            "type": "object",
+            "additionalProperties": {}
+        },
         "github_com_roslava_samotsvety-api_internal_domain.EntityType": {
             "type": "string",
             "enum": [
@@ -616,6 +835,101 @@
                 }
             }
         },
+        "github_com_roslava_samotsvety-api_internal_domain.Post": {
+            "type": "object",
+            "required": [
+                "slug",
+                "title_en",
+                "title_ru",
+                "type"
+            ],
+            "properties": {
+                "author": {
+                    "type": "string"
+                },
+                "content_en": {
+                    "type": "string"
+                },
+                "content_ru": {
+                    "description": "Markdown или HTML",
+                    "type": "string"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "excerpt_en": {
+                    "type": "string"
+                },
+                "excerpt_ru": {
+                    "type": "string"
+                },
+                "gem_slugs": {
+                    "description": "Связанные самоцветы",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_published": {
+                    "type": "boolean"
+                },
+                "published_at": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title_en": {
+                    "type": "string"
+                },
+                "title_ru": {
+                    "type": "string"
+                },
+                "type": {
+                    "enum": [
+                        "blog",
+                        "guide",
+                        "history",
+                        "esoteric",
+                        "review"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.PostType"
+                        }
+                    ]
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_roslava_samotsvety-api_internal_domain.PostType": {
+            "type": "string",
+            "enum": [
+                "blog",
+                "guide",
+                "history",
+                "esoteric",
+                "review"
+            ],
+            "x-enum-varnames": [
+                "PostTypeBlog",
+                "PostTypeGuide",
+                "PostTypeHistory",
+                "PostTypeEsoteric",
+                "PostTypeReview"
+            ]
+        },
         "github_com_roslava_samotsvety-api_internal_domain.Rarity": {
             "type": "string",
             "enum": [
@@ -779,7 +1093,8 @@
             "required": [
                 "i18n",
                 "scientific",
-                "slug"
+                "slug",
+                "type"
             ],
             "properties": {
                 "gallery": {
@@ -814,6 +1129,81 @@
                 },
                 "slug": {
                     "type": "string"
+                },
+                "thumbnail_url": {
+                    "type": "string"
+                },
+                "type": {
+                    "enum": [
+                        "mineral",
+                        "rock",
+                        "gem_variety",
+                        "organic"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.EntityType"
+                        }
+                    ]
+                }
+            }
+        },
+        "internal_handler.CreatePostRequest": {
+            "type": "object",
+            "required": [
+                "slug",
+                "title_en",
+                "title_ru",
+                "type"
+            ],
+            "properties": {
+                "author": {
+                    "type": "string"
+                },
+                "content_en": {
+                    "type": "string"
+                },
+                "content_ru": {
+                    "type": "string"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "excerpt_en": {
+                    "type": "string"
+                },
+                "excerpt_ru": {
+                    "type": "string"
+                },
+                "gem_slugs": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "is_published": {
+                    "type": "boolean"
+                },
+                "published_at": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title_en": {
+                    "type": "string"
+                },
+                "title_ru": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.PostType"
                 }
             }
         },
@@ -889,6 +1279,75 @@
                 },
                 "slug": {
                     "type": "string"
+                },
+                "thumbnail_url": {
+                    "type": "string"
+                },
+                "type": {
+                    "enum": [
+                        "mineral",
+                        "rock",
+                        "gem_variety",
+                        "organic"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.EntityType"
+                        }
+                    ]
+                }
+            }
+        },
+        "internal_handler.UpdatePostRequest": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "type": "string"
+                },
+                "content_en": {
+                    "type": "string"
+                },
+                "content_ru": {
+                    "type": "string"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "excerpt_en": {
+                    "type": "string"
+                },
+                "excerpt_ru": {
+                    "type": "string"
+                },
+                "gem_slugs": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "is_published": {
+                    "type": "boolean"
+                },
+                "published_at": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title_en": {
+                    "type": "string"
+                },
+                "title_ru": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/github_com_roslava_samotsvety-api_internal_domain.PostType"
                 }
             }
         }
