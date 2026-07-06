@@ -127,7 +127,7 @@ func (r *PostgresPostRepository) Search(ctx context.Context, query, lang string,
 		return []domain.Post{}, 0, nil
 	}
 
-	searchPattern := "%" + query + "%"
+	searchQuery := query + ":*"
 
 	querySQL := `
 		SELECT id, slug, type, title_ru, title_en, excerpt_ru, excerpt_en, 
@@ -135,23 +135,29 @@ func (r *PostgresPostRepository) Search(ctx context.Context, query, lang string,
 		       published_at, updated_at, is_published, author
 		FROM posts
 		WHERE is_published = true 
-		  AND (title_ru ILIKE $1 OR title_en ILIKE $1 OR content_ru ILIKE $1 OR content_en ILIKE $1)
+		  AND (
+		    to_tsvector('russian', COALESCE(title_ru, '') || ' ' || COALESCE(content_ru, '')) @@ to_tsquery('russian', $1) OR
+		    to_tsvector('english', COALESCE(title_en, '') || ' ' || COALESCE(content_en, '')) @@ to_tsquery('english', $1)
+		  )
 		ORDER BY published_at DESC
 		LIMIT $2 OFFSET $3
 	`
 
 	var rows []postRow
-	if err := r.db.SelectContext(ctx, &rows, querySQL, searchPattern, limit, offset); err != nil {
+	if err := r.db.SelectContext(ctx, &rows, querySQL, searchQuery, limit, offset); err != nil {
 		return nil, 0, fmt.Errorf("search query error: %w", err)
 	}
 
 	countSQL := `
 		SELECT COUNT(*) FROM posts 
 		WHERE is_published = true 
-		  AND (title_ru ILIKE $1 OR title_en ILIKE $1 OR content_ru ILIKE $1 OR content_en ILIKE $1)
+		  AND (
+		    to_tsvector('russian', COALESCE(title_ru, '') || ' ' || COALESCE(content_ru, '')) @@ to_tsquery('russian', $1) OR
+		    to_tsvector('english', COALESCE(title_en, '') || ' ' || COALESCE(content_en, '')) @@ to_tsquery('english', $1)
+		  )
 	`
 	var total int
-	r.db.GetContext(ctx, &total, countSQL, searchPattern)
+	r.db.GetContext(ctx, &total, countSQL, searchQuery)
 
 	var results []domain.Post
 	for _, row := range rows {
