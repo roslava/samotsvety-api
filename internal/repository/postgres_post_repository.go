@@ -126,11 +126,39 @@ func (r *PostgresPostRepository) Search(ctx context.Context, query, lang string,
 	if query == "" {
 		return []domain.Post{}, 0, nil
 	}
-	filters := PostFilterParams{
-		Limit: limit,
-		Page:  (offset / limit) + 1,
+
+	searchPattern := "%" + query + "%"
+
+	querySQL := `
+		SELECT id, slug, type, title_ru, title_en, excerpt_ru, excerpt_en, 
+		       content_ru, content_en, cover_image, gem_slugs, tags, 
+		       published_at, updated_at, is_published, author
+		FROM posts
+		WHERE is_published = true 
+		  AND (title_ru ILIKE $1 OR title_en ILIKE $1 OR content_ru ILIKE $1 OR content_en ILIKE $1)
+		ORDER BY published_at DESC
+		LIMIT $2 OFFSET $3
+	`
+
+	var rows []postRow
+	if err := r.db.SelectContext(ctx, &rows, querySQL, searchPattern, limit, offset); err != nil {
+		return nil, 0, fmt.Errorf("search query error: %w", err)
 	}
-	return r.List(ctx, filters)
+
+	countSQL := `
+		SELECT COUNT(*) FROM posts 
+		WHERE is_published = true 
+		  AND (title_ru ILIKE $1 OR title_en ILIKE $1 OR content_ru ILIKE $1 OR content_en ILIKE $1)
+	`
+	var total int
+	r.db.GetContext(ctx, &total, countSQL, searchPattern)
+
+	var results []domain.Post
+	for _, row := range rows {
+		results = append(results, *row.toPost())
+	}
+
+	return results, total, nil
 }
 
 type postRow struct {
