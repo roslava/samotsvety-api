@@ -4,6 +4,7 @@ package handler
 import (
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -285,4 +286,38 @@ type UpdatePostRequest struct {
 	PublishedAt *time.Time       `json:"published_at"`
 	IsPublished *bool            `json:"is_published"`
 	Author      *string          `json:"author"`
+}
+
+// SearchPosts godoc
+// @Summary      Поиск по статьям
+// @Description  Полнотекстовый поиск
+// @Tags         search
+// @Produce      json
+// @Param        q      query  string  true  "Поисковый запрос"
+// @Param        lang   query  string  false "Язык"
+// @Param        limit  query  int     false "Лимит"
+// @Success      200  {object}  gin.H
+// @Router       /api/v1/search/posts [get]
+func (h *PostHandler) SearchPosts(c *gin.Context) {
+	q := c.Query("q")
+	lang := c.DefaultQuery("lang", "ru")
+	limitStr := c.DefaultQuery("limit", "20")
+
+	limit, _ := strconv.Atoi(limitStr)
+	if limit == 0 || limit > 100 {
+		limit = 20
+	}
+
+	results, total, err := h.repo.Search(c.Request.Context(), q, lang, limit, 0)
+	if err != nil {
+		slog.Error("Search posts failed", "error", err)
+		RespondInternalError(c, "Search error")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":  results,
+		"total": total,
+		"limit": limit,
+	})
 }
