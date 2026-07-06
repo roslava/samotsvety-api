@@ -870,6 +870,33 @@ paths:
       summary: Поиск минералов
       tags:
       - search
+  /api/v1/search/posts:
+    get:
+      description: Полнотекстовый поиск
+      parameters:
+      - description: Поисковый запрос
+        in: query
+        name: q
+        required: true
+        type: string
+      - description: Язык
+        in: query
+        name: lang
+        type: string
+      - description: Лимит
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/gin.H'
+      summary: Поиск по статьям
+      tags:
+      - search
   /minerals/{slug}:
     put:
       consumes:
