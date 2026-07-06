@@ -163,3 +163,126 @@ type CreatePostRequest struct {
 	IsPublished bool            `json:"is_published"`
 	Author      string          `json:"author"`
 }
+
+// UpdatePost godoc
+// @Summary      Обновить статью
+// @Tags         posts
+// @Accept       json
+// @Produce      json
+// @Param        slug  path    string  true  "Slug статьи"
+// @Param        post body handler.UpdatePostRequest true "Данные для обновления"
+// @Success      200  {object}  domain.Post
+// @Failure      400  {object}  handler.ErrorResponse
+// @Failure      404  {object}  handler.ErrorResponse
+// @Router       /api/v1/posts/{slug} [put]
+func (h *PostHandler) UpdatePost(c *gin.Context) {
+	slug := c.Param("slug")
+
+	var req UpdatePostRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		RespondValidationError(c, err)
+		return
+	}
+
+	// Получаем текущую статью
+	post, err := h.repo.GetBySlug(c.Request.Context(), slug, "ru")
+	if err != nil {
+		RespondNotFound(c, "Статья не найдена")
+		return
+	}
+
+	// Обновляем поля, если переданы
+	if req.Slug != nil && *req.Slug != "" {
+		post.Slug = *req.Slug
+	}
+	if req.Type != nil {
+		post.Type = *req.Type
+	}
+	if req.TitleRu != nil {
+		post.TitleRu = *req.TitleRu
+	}
+	if req.TitleEn != nil {
+		post.TitleEn = *req.TitleEn
+	}
+	if req.ExcerptRu != nil {
+		post.ExcerptRu = *req.ExcerptRu
+	}
+	if req.ExcerptEn != nil {
+		post.ExcerptEn = *req.ExcerptEn
+	}
+	if req.ContentRu != nil {
+		post.ContentRu = *req.ContentRu
+	}
+	if req.ContentEn != nil {
+		post.ContentEn = *req.ContentEn
+	}
+	if req.CoverImage != nil {
+		post.CoverImage = *req.CoverImage
+	}
+	if req.GemSlugs != nil {
+		post.GemSlugs = *req.GemSlugs
+	}
+	if req.Tags != nil {
+		post.Tags = *req.Tags
+	}
+	if req.PublishedAt != nil {
+		post.PublishedAt = req.PublishedAt
+	}
+	if req.IsPublished != nil {
+		post.IsPublished = *req.IsPublished
+	}
+	if req.Author != nil {
+		post.Author = *req.Author
+	}
+
+	post.UpdatedAt = time.Now().UTC()
+
+	if err := h.repo.Update(c.Request.Context(), slug, post); err != nil {
+		slog.Error("Failed to update post", "error", err, "slug", slug)
+		RespondInternalError(c, "Не удалось обновить статью")
+		return
+	}
+
+	c.JSON(http.StatusOK, post)
+}
+
+// DeletePost godoc
+// @Summary      Удалить статью
+// @Tags         posts
+// @Produce      json
+// @Param        slug  path  string  true  "Slug статьи"
+// @Success      204
+// @Failure      404  {object}  handler.ErrorResponse
+// @Router       /api/v1/posts/{slug} [delete]
+func (h *PostHandler) DeletePost(c *gin.Context) {
+	slug := c.Param("slug")
+
+	if err := h.repo.Delete(c.Request.Context(), slug); err != nil {
+		if err.Error() == "post not found" {
+			RespondNotFound(c, "Статья не найдена")
+			return
+		}
+		slog.Error("Failed to delete post", "error", err, "slug", slug)
+		RespondInternalError(c, "Не удалось удалить статью")
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+type UpdatePostRequest struct {
+	Slug        *string          `json:"slug"`
+	Type        *domain.PostType `json:"type"`
+	TitleRu     *string          `json:"title_ru"`
+	TitleEn     *string          `json:"title_en"`
+	ExcerptRu   *string          `json:"excerpt_ru"`
+	ExcerptEn   *string          `json:"excerpt_en"`
+	ContentRu   *string          `json:"content_ru"`
+	ContentEn   *string          `json:"content_en"`
+	CoverImage  *string          `json:"cover_image"`
+	GemSlugs    *[]string        `json:"gem_slugs"`
+	Tags        *[]string        `json:"tags"`
+	PublishedAt *time.Time       `json:"published_at"`
+	IsPublished *bool            `json:"is_published"`
+	Author      *string          `json:"author"`
+}
