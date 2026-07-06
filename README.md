@@ -94,3 +94,12 @@ Docker + Makefile
 
 ```
 
+## Эндпоинты статей
+
+- `GET /api/v1/posts` — список статей
+- `GET /api/v1/posts/{slug}` — одна статья
+- `POST /api/v1/posts` — создание (admin)
+- `PUT /api/v1/posts/{slug}` — обновление (admin)
+- `DELETE /api/v1/posts/{slug}` — удаление (admin)
+- `GET /api/v1/search/posts?q=...` — поиск
+
