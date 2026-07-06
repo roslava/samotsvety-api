@@ -219,16 +219,67 @@ func (r *PostgresPostRepository) Create(ctx context.Context, post *domain.Post) 
 	return nil
 }
 
-// TODO: Implement full CRUD
+func (r *PostgresPostRepository) Update(ctx context.Context, oldSlug string, post *domain.Post) error {
+	// Проверка уникальности нового slug (если изменился)
+	if post.Slug != oldSlug {
+		var count int
+		err := r.db.GetContext(ctx, &count, "SELECT COUNT(*) FROM posts WHERE slug = $1", post.Slug)
+		if err != nil {
+			return fmt.Errorf("failed to check slug uniqueness: %w", err)
+		}
+		if count > 0 {
+			return fmt.Errorf("slug_already_exists")
+		}
+	}
 
-func (r *PostgresPostRepository) Update(ctx context.Context, slug string, post *domain.Post) error {
-	return fmt.Errorf("not implemented yet")
+	query := `
+		UPDATE posts 
+		SET slug = $1, type = $2, title_ru = $3, title_en = $4,
+		    excerpt_ru = $5, excerpt_en = $6, content_ru = $7, content_en = $8,
+		    cover_image = $9, gem_slugs = $10, tags = $11,
+		    published_at = $12, updated_at = NOW(), is_published = $13, author = $14
+		WHERE slug = $15`
+
+	_, err := r.db.ExecContext(ctx, query,
+		post.Slug,
+		post.Type,
+		post.TitleRu,
+		post.TitleEn,
+		post.ExcerptRu,
+		post.ExcerptEn,
+		post.ContentRu,
+		post.ContentEn,
+		post.CoverImage,
+		pq.StringArray(post.GemSlugs),
+		pq.StringArray(post.Tags),
+		post.PublishedAt,
+		post.IsPublished,
+		post.Author,
+		oldSlug,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to update post: %w", err)
+	}
+
+	return nil
 }
 
 func (r *PostgresPostRepository) Delete(ctx context.Context, slug string) error {
-	return fmt.Errorf("not implemented yet")
+	result, err := r.db.ExecContext(ctx, "DELETE FROM posts WHERE slug = $1", slug)
+	if err != nil {
+		return fmt.Errorf("failed to delete post: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("post not found")
+	}
+
+	return nil
 }
 
+// TODO: Implement full CRUD
 func (r *PostgresPostRepository) GetByGemSlug(ctx context.Context, gemSlug string, lang string, limit int) ([]domain.Post, error) {
 	return nil, nil
 }
