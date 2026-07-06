@@ -58,6 +58,7 @@ func NewRouter(mineralRepo repository.MineralRepository, postRepo repository.Pos
 		// Поиск и фильтры — публичные
 		v1.GET("/search", mineralHandler.SearchMinerals)
 		v1.GET("/filters", mineralHandler.GetFilters)
+		v1.GET("/search/posts", postHandler.SearchPosts)
 	}
 
 	// Healthcheck
