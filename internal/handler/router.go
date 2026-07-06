@@ -50,8 +50,8 @@ func NewRouter(mineralRepo repository.MineralRepository, postRepo repository.Pos
 			admin.Use(middleware.APIKeyAuth())
 			{
 				admin.POST("", postHandler.CreatePost)
-				// admin.PUT("/:slug", postHandler.UpdatePost) // добавим позже
-				// admin.DELETE("/:slug", postHandler.DeletePost)
+				admin.PUT("/:slug", postHandler.UpdatePost)
+				admin.DELETE("/:slug", postHandler.DeletePost)
 			}
 		}
 
