@@ -27,7 +27,12 @@ func main() {
 	slog.Info("Starting seeding process...")
 
 	if err := repository.SeedMinerals(db, "seeds/minerals"); err != nil {
-		slog.Error("Seeding failed", "error", err)
+		slog.Error("Seeding minerals failed", "error", err)
+		return
+	}
+
+	if err := repository.SeedPosts(db, "seeds/posts"); err != nil {
+		slog.Error("Seeding posts failed", "error", err)
 		return
 	}
 

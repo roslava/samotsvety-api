@@ -4,6 +4,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -24,8 +25,7 @@ func NewPostgresPostRepository(db *sqlx.DB) *PostgresPostRepository {
 
 func (r *PostgresPostRepository) GetBySlug(ctx context.Context, slug, lang string) (*domain.Post, error) {
 	var p postRow
-	query := `SELECT id, slug, type, title_ru, title_en, excerpt_ru, excerpt_en, 
-	                 content_ru, content_en, cover_image, gem_slugs, tags, 
+	query := `SELECT id, slug, type, i18n, cover_image, gem_slugs, tags,
 	                 published_at, updated_at, is_published, author
 	          FROM posts WHERE slug = $1`
 
@@ -37,6 +37,9 @@ func (r *PostgresPostRepository) GetBySlug(ctx context.Context, slug, lang strin
 		return nil, fmt.Errorf("db error: %w", err)
 	}
 
+	// lang сохраняется в сигнатуре для обратной совместимости и на будущее (например,
+	// сортировка по локализованному заголовку), но сам ответ содержит оба языка —
+	// выбор нужного языка отдаётся на откуп фронтенду, как и у GemEntity.
 	return p.toPost(), nil
 }
 
@@ -91,8 +94,7 @@ func (r *PostgresPostRepository) List(ctx context.Context, filters PostFilterPar
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, slug, type, title_ru, title_en, excerpt_ru, excerpt_en, 
-		       content_ru, content_en, cover_image, gem_slugs, tags, 
+		SELECT id, slug, type, i18n, cover_image, gem_slugs, tags,
 		       published_at, updated_at, is_published, author
 		FROM posts
 		%s
@@ -130,14 +132,13 @@ func (r *PostgresPostRepository) Search(ctx context.Context, query, lang string,
 	searchQuery := query + ":*"
 
 	querySQL := `
-		SELECT id, slug, type, title_ru, title_en, excerpt_ru, excerpt_en, 
-		       content_ru, content_en, cover_image, gem_slugs, tags, 
+		SELECT id, slug, type, i18n, cover_image, gem_slugs, tags,
 		       published_at, updated_at, is_published, author
 		FROM posts
-		WHERE is_published = true 
+		WHERE is_published = true
 		  AND (
-		    to_tsvector('russian', COALESCE(title_ru, '') || ' ' || COALESCE(content_ru, '')) @@ to_tsquery('russian', $1) OR
-		    to_tsvector('english', COALESCE(title_en, '') || ' ' || COALESCE(content_en, '')) @@ to_tsquery('english', $1)
+		    to_tsvector('russian', COALESCE(i18n->'ru'->>'title', '') || ' ' || COALESCE(i18n->'ru'->>'content', '')) @@ to_tsquery('russian', $1) OR
+		    to_tsvector('english', COALESCE(i18n->'en'->>'title', '') || ' ' || COALESCE(i18n->'en'->>'content', '')) @@ to_tsquery('english', $1)
 		  )
 		ORDER BY published_at DESC
 		LIMIT $2 OFFSET $3
@@ -149,11 +150,11 @@ func (r *PostgresPostRepository) Search(ctx context.Context, query, lang string,
 	}
 
 	countSQL := `
-		SELECT COUNT(*) FROM posts 
-		WHERE is_published = true 
+		SELECT COUNT(*) FROM posts
+		WHERE is_published = true
 		  AND (
-		    to_tsvector('russian', COALESCE(title_ru, '') || ' ' || COALESCE(content_ru, '')) @@ to_tsquery('russian', $1) OR
-		    to_tsvector('english', COALESCE(title_en, '') || ' ' || COALESCE(content_en, '')) @@ to_tsquery('english', $1)
+		    to_tsvector('russian', COALESCE(i18n->'ru'->>'title', '') || ' ' || COALESCE(i18n->'ru'->>'content', '')) @@ to_tsquery('russian', $1) OR
+		    to_tsvector('english', COALESCE(i18n->'en'->>'title', '') || ' ' || COALESCE(i18n->'en'->>'content', '')) @@ to_tsquery('english', $1)
 		  )
 	`
 	var total int
@@ -171,12 +172,7 @@ type postRow struct {
 	ID          string         `db:"id"`
 	Slug        string         `db:"slug"`
 	Type        string         `db:"type"`
-	TitleRu     string         `db:"title_ru"`
-	TitleEn     string         `db:"title_en"`
-	ExcerptRu   string         `db:"excerpt_ru"`
-	ExcerptEn   string         `db:"excerpt_en"`
-	ContentRu   string         `db:"content_ru"`
-	ContentEn   string         `db:"content_en"`
+	I18n        []byte         `db:"i18n"`
 	CoverImage  string         `db:"cover_image"`
 	GemSlugs    pq.StringArray `db:"gem_slugs"`
 	Tags        pq.StringArray `db:"tags"`
@@ -187,16 +183,14 @@ type postRow struct {
 }
 
 func (row postRow) toPost() *domain.Post {
+	var i18n domain.PostI18n
+	json.Unmarshal(row.I18n, &i18n)
+
 	return &domain.Post{
 		ID:          row.ID,
 		Slug:        row.Slug,
 		Type:        domain.PostType(row.Type),
-		TitleRu:     row.TitleRu,
-		TitleEn:     row.TitleEn,
-		ExcerptRu:   row.ExcerptRu,
-		ExcerptEn:   row.ExcerptEn,
-		ContentRu:   row.ContentRu,
-		ContentEn:   row.ContentEn,
+		I18n:        i18n,
 		CoverImage:  row.CoverImage,
 		GemSlugs:    row.GemSlugs,
 		Tags:        row.Tags,
@@ -218,25 +212,21 @@ func (r *PostgresPostRepository) Create(ctx context.Context, post *domain.Post) 
 		return fmt.Errorf("slug_already_exists")
 	}
 
+	i18nJSON, _ := json.Marshal(post.I18n)
+
 	query := `
 		INSERT INTO posts (
-			slug, type, title_ru, title_en, excerpt_ru, excerpt_en,
-			content_ru, content_en, cover_image, gem_slugs, tags,
+			slug, type, i18n, cover_image, gem_slugs, tags,
 			published_at, updated_at, is_published, author
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 		)
 	`
 
 	_, err = r.db.ExecContext(ctx, query,
 		post.Slug,
 		post.Type,
-		post.TitleRu,
-		post.TitleEn,
-		post.ExcerptRu,
-		post.ExcerptEn,
-		post.ContentRu,
-		post.ContentEn,
+		i18nJSON,
 		post.CoverImage,
 		pq.StringArray(post.GemSlugs),
 		pq.StringArray(post.Tags),
@@ -266,23 +256,19 @@ func (r *PostgresPostRepository) Update(ctx context.Context, oldSlug string, pos
 		}
 	}
 
+	i18nJSON, _ := json.Marshal(post.I18n)
+
 	query := `
-		UPDATE posts 
-		SET slug = $1, type = $2, title_ru = $3, title_en = $4,
-		    excerpt_ru = $5, excerpt_en = $6, content_ru = $7, content_en = $8,
-		    cover_image = $9, gem_slugs = $10, tags = $11,
-		    published_at = $12, updated_at = NOW(), is_published = $13, author = $14
-		WHERE slug = $15`
+		UPDATE posts
+		SET slug = $1, type = $2, i18n = $3,
+		    cover_image = $4, gem_slugs = $5, tags = $6,
+		    published_at = $7, updated_at = NOW(), is_published = $8, author = $9
+		WHERE slug = $10`
 
 	_, err := r.db.ExecContext(ctx, query,
 		post.Slug,
 		post.Type,
-		post.TitleRu,
-		post.TitleEn,
-		post.ExcerptRu,
-		post.ExcerptEn,
-		post.ContentRu,
-		post.ContentEn,
+		i18nJSON,
 		post.CoverImage,
 		pq.StringArray(post.GemSlugs),
 		pq.StringArray(post.Tags),

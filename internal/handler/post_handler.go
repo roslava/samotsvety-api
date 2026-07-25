@@ -111,12 +111,7 @@ func (h *PostHandler) CreatePost(c *gin.Context) {
 	post := &domain.Post{
 		Slug:        req.Slug,
 		Type:        req.Type,
-		TitleRu:     req.TitleRu,
-		TitleEn:     req.TitleEn,
-		ExcerptRu:   req.ExcerptRu,
-		ExcerptEn:   req.ExcerptEn,
-		ContentRu:   req.ContentRu,
-		ContentEn:   req.ContentEn,
+		I18n:        req.I18n,
 		CoverImage:  req.CoverImage,
 		GemSlugs:    req.GemSlugs,
 		Tags:        req.Tags,
@@ -148,15 +143,11 @@ type ListPostsRequest struct {
 	Published bool   `form:"published"`
 }
 
+// CreatePostRequest — DTO для создания статьи
 type CreatePostRequest struct {
 	Slug        string          `json:"slug" validate:"required"`
 	Type        domain.PostType `json:"type" validate:"required"`
-	TitleRu     string          `json:"title_ru" validate:"required"`
-	TitleEn     string          `json:"title_en" validate:"required"`
-	ExcerptRu   string          `json:"excerpt_ru"`
-	ExcerptEn   string          `json:"excerpt_en"`
-	ContentRu   string          `json:"content_ru"`
-	ContentEn   string          `json:"content_en"`
+	I18n        domain.PostI18n `json:"i18n" validate:"required"`
 	CoverImage  string          `json:"cover_image"`
 	GemSlugs    []string        `json:"gem_slugs"`
 	Tags        []string        `json:"tags"`
@@ -199,23 +190,8 @@ func (h *PostHandler) UpdatePost(c *gin.Context) {
 	if req.Type != nil {
 		post.Type = *req.Type
 	}
-	if req.TitleRu != nil {
-		post.TitleRu = *req.TitleRu
-	}
-	if req.TitleEn != nil {
-		post.TitleEn = *req.TitleEn
-	}
-	if req.ExcerptRu != nil {
-		post.ExcerptRu = *req.ExcerptRu
-	}
-	if req.ExcerptEn != nil {
-		post.ExcerptEn = *req.ExcerptEn
-	}
-	if req.ContentRu != nil {
-		post.ContentRu = *req.ContentRu
-	}
-	if req.ContentEn != nil {
-		post.ContentEn = *req.ContentEn
+	if req.I18n != nil {
+		post.I18n = *req.I18n
 	}
 	if req.CoverImage != nil {
 		post.CoverImage = *req.CoverImage
@@ -271,15 +247,11 @@ func (h *PostHandler) DeletePost(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// UpdatePostRequest — DTO для обновления статьи (все поля опциональны)
 type UpdatePostRequest struct {
 	Slug        *string          `json:"slug"`
 	Type        *domain.PostType `json:"type"`
-	TitleRu     *string          `json:"title_ru"`
-	TitleEn     *string          `json:"title_en"`
-	ExcerptRu   *string          `json:"excerpt_ru"`
-	ExcerptEn   *string          `json:"excerpt_en"`
-	ContentRu   *string          `json:"content_ru"`
-	ContentEn   *string          `json:"content_en"`
+	I18n        *domain.PostI18n `json:"i18n"`
 	CoverImage  *string          `json:"cover_image"`
 	GemSlugs    *[]string        `json:"gem_slugs"`
 	Tags        *[]string        `json:"tags"`

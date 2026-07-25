@@ -20,13 +20,7 @@ type Post struct {
 	Slug string   `json:"slug" validate:"required,alphanumdash"`
 	Type PostType `json:"type" validate:"required,oneof=blog guide history esoteric review"`
 
-	TitleRu   string `json:"title_ru" validate:"required"`
-	TitleEn   string `json:"title_en" validate:"required"`
-	ExcerptRu string `json:"excerpt_ru"`
-	ExcerptEn string `json:"excerpt_en"`
-
-	ContentRu string `json:"content_ru"` // Markdown или HTML
-	ContentEn string `json:"content_en"`
+	I18n PostI18n `json:"i18n" validate:"required"`
 
 	CoverImage string   `json:"cover_image,omitempty"`
 	GemSlugs   []string `json:"gem_slugs,omitempty"` // Связанные самоцветы
@@ -36,4 +30,17 @@ type Post struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 	IsPublished bool       `json:"is_published"`
 	Author      string     `json:"author,omitempty"`
+}
+
+// PostI18n — переводимый контент статьи, тот же паттерн, что и I18n у GemEntity
+type PostI18n struct {
+	Ru PostLangData `json:"ru"`
+	En PostLangData `json:"en"`
+}
+
+// PostLangData — контент статьи на одном языке
+type PostLangData struct {
+	Title   string `json:"title" validate:"required"`
+	Excerpt string `json:"excerpt,omitempty"`
+	Content string `json:"content,omitempty"` // Markdown или HTML
 }
