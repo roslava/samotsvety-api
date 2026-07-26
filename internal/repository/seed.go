@@ -34,7 +34,6 @@ func SeedMinerals(db *sqlx.DB, seedDir string) error {
 			return fmt.Errorf("failed to unmarshal %s: %w", path, err)
 		}
 
-		// Устанавливаем type, если не указан
 		if mineral.Type == "" {
 			mineral.Type = domain.TypeMineral
 		}
@@ -49,13 +48,15 @@ func SeedMinerals(db *sqlx.DB, seedDir string) error {
 			related = []string{}
 		}
 
+		// safety_notes больше не отдельная колонка — он теперь внутри i18n.ru/en
+		// (domain.LangData.SafetyNotes), поэтому в этот INSERT не входит вообще.
 		query := `
 			INSERT INTO minerals (
 				slug, type, scientific, i18n, main_image_url, thumbnail_url, 
-				safety_notes, localities, gallery, related_minerals, 
+				localities, gallery, related_minerals, 
 				created_at, updated_at
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
 			ON CONFLICT (slug) DO UPDATE 
 			SET 
 				type = EXCLUDED.type,
@@ -63,7 +64,6 @@ func SeedMinerals(db *sqlx.DB, seedDir string) error {
 				i18n = EXCLUDED.i18n,
 				main_image_url = EXCLUDED.main_image_url,
 				thumbnail_url = EXCLUDED.thumbnail_url,
-				safety_notes = EXCLUDED.safety_notes,
 				localities = EXCLUDED.localities,
 				gallery = EXCLUDED.gallery,
 				related_minerals = EXCLUDED.related_minerals,
@@ -77,7 +77,6 @@ func SeedMinerals(db *sqlx.DB, seedDir string) error {
 			i18nJSON,
 			mineral.MainImageURL,
 			mineral.ThumbnailURL,
-			mineral.SafetyNotes,
 			localitiesJSON,
 			galleryJSON,
 			related,
