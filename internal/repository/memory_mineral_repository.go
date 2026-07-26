@@ -154,12 +154,16 @@ func (r *MemoryMineralRepository) GetFilters(ctx context.Context) (*FilterValues
 			}
 		}
 
-		// Собираем группы
-		groupMap[mineral.Scientific.MineralGroup] = true
+		// Группа минерала переехала в i18n (MineralGroup больше не в Scientific)
+		if mineral.I18n.Ru.MineralGroup != "" {
+			groupMap[mineral.I18n.Ru.MineralGroup] = true
+		}
 
-		// Собираем страны
+		// Страна переехала в CountryRu/CountryEn (были одноязычным Country)
 		for _, locality := range mineral.Localities {
-			countryMap[locality.Country] = true
+			if locality.CountryRu != "" {
+				countryMap[locality.CountryRu] = true
+			}
 		}
 
 		// Трекируем диапазон твёрдости
