@@ -16,7 +16,6 @@ const (
 )
 
 // GemEntity — основная сущность (ранее Mineral)
-// Для обратной совместимости можно оставить alias, если нужно
 type GemEntity struct {
 	Slug            string         `json:"slug" validate:"required,alphanumdash"`
 	Type            EntityType     `json:"type" validate:"required,oneof=mineral rock gem_variety organic"`
@@ -24,44 +23,33 @@ type GemEntity struct {
 	I18n            I18n           `json:"i18n"`
 	Localities      []Locality     `json:"localities,omitempty"`
 	MainImageURL    string         `json:"main_image_url,omitempty"`
-	ThumbnailURL    *string        `json:"thumbnail_url,omitempty"` // новое
+	ThumbnailURL    *string        `json:"thumbnail_url,omitempty"`
 	Gallery         []GalleryImage `json:"gallery,omitempty"`
-	SafetyNotes     string         `json:"safety_notes,omitempty"`
 	RelatedMinerals []string       `json:"related_minerals,omitempty"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
+	// SafetyNotes переехал в I18n.LangData.SafetyNotes — он был языкозависимым
+	// текстом ("Безопасен...", "При обработке возможна пыль...") без английской
+	// версии, так что жить он должен рядом с остальным переводимым контентом.
 }
 
 // Mineral — alias для обратной совместимости на переходный период
 type Mineral = GemEntity
 
-// Scientific — научные данные (непереводимые)
+// Scientific — по-настоящему языконезависимые данные: формула, числа, категория.
+// Всё, что раньше тут лежало текстом на русском (группа, система, блеск и т.д.),
+// переехало в LangData ниже — там ему самое место.
 type Scientific struct {
-	ChemicalFormula    string          `json:"chemical_formula,omitempty"` // ослаблена
-	MineralGroup       string          `json:"mineral_group" validate:"required"`
-	CrystalSystem      string          `json:"crystal_system,omitempty"` // ослаблена
-	CrystalHabit       string          `json:"crystal_habit,omitempty"`
-	Hardness           Hardness        `json:"hardness" validate:"required"`
-	SpecificGravity    SpecificGravity `json:"specific_gravity" validate:"required"`
-	Streak             string          `json:"streak" validate:"required"`
-	Luster             string          `json:"luster" validate:"required"`
-	Transparency       string          `json:"transparency" validate:"required"`
-	Cleavage           string          `json:"cleavage,omitempty"`
-	Fracture           string          `json:"fracture,omitempty"`
-	Tenacity           string          `json:"tenacity,omitempty"`
-	Rarity             Rarity          `json:"rarity" validate:"required,oneof=common uncommon rare very_rare"`
-	IMAStatus          string          `json:"ima_status,omitempty"`
-	IdentificationTips string          `json:"identification_tips,omitempty"`
-	Composition        string          `json:"composition,omitempty"` // новое
-	RockType           string          `json:"rock_type,omitempty"`   // новое
-	Phenomena          []string        `json:"phenomena,omitempty"`   // новое
+	ChemicalFormula string          `json:"chemical_formula,omitempty"`
+	Hardness        Hardness        `json:"hardness" validate:"required"`
+	SpecificGravity SpecificGravity `json:"specific_gravity" validate:"required"`
+	Rarity          Rarity          `json:"rarity" validate:"required,oneof=common uncommon rare very_rare"`
 }
 
-// Hardness, SpecificGravity, Rarity, I18n, LangData, Esoteric, Locality, GalleryImage — без изменений
 type Hardness struct {
-	Min  float64 `json:"min" validate:"required,gte=1,lte=10"`
-	Max  float64 `json:"max" validate:"required,gte=1,lte=10"`
-	Note string  `json:"note,omitempty"`
+	Min float64 `json:"min" validate:"required,gte=1,lte=10"`
+	Max float64 `json:"max" validate:"required,gte=1,lte=10"`
+	// Note (было "по шкале Мооса") — переехало в LangData.HardnessNote
 }
 
 type SpecificGravity struct {
@@ -83,6 +71,10 @@ type I18n struct {
 	En LangData `json:"en"`
 }
 
+// LangData — весь переводимый контент минерала на одном языке.
+// Раньше часть этих полей (Mineral Group, Crystal System, Streak и т.д.) жила
+// в Scientific — из-за этого при переключении на EN они не могли не остаться
+// русскими: для них физически не было английской версии. Теперь всё здесь.
 type LangData struct {
 	Name             string    `json:"name" validate:"required"`
 	Synonyms         []string  `json:"synonyms,omitempty"`
@@ -90,6 +82,23 @@ type LangData struct {
 	ColorDescription string    `json:"color_description,omitempty"`
 	Lore             string    `json:"lore" validate:"required"`
 	Esoteric         *Esoteric `json:"esoteric,omitempty"`
+
+	MineralGroup       string   `json:"mineral_group,omitempty"`
+	CrystalSystem      string   `json:"crystal_system,omitempty"`
+	CrystalHabit       string   `json:"crystal_habit,omitempty"`
+	Streak             string   `json:"streak,omitempty"`
+	Luster             string   `json:"luster,omitempty"`
+	Transparency       string   `json:"transparency,omitempty"`
+	Cleavage           string   `json:"cleavage,omitempty"`
+	Fracture           string   `json:"fracture,omitempty"`
+	Tenacity           string   `json:"tenacity,omitempty"`
+	HardnessNote       string   `json:"hardness_note,omitempty"`
+	IMAStatus          string   `json:"ima_status,omitempty"`
+	IdentificationTips string   `json:"identification_tips,omitempty"`
+	Composition        string   `json:"composition,omitempty"`
+	RockType           string   `json:"rock_type,omitempty"`
+	Phenomena          []string `json:"phenomena,omitempty"`
+	SafetyNotes        string   `json:"safety_notes,omitempty"`
 }
 
 type Esoteric struct {
@@ -101,10 +110,15 @@ type Esoteric struct {
 	RitualUses             string   `json:"ritual_uses,omitempty"`
 }
 
+// Locality — country/region/locality раньше были одноязычными полями.
+// Теперь у каждого есть _ru/_en, как и у description.
 type Locality struct {
-	Country       string `json:"country"`
-	Region        string `json:"region,omitempty"`
-	Locality      string `json:"locality,omitempty"`
+	CountryRu     string `json:"country_ru"`
+	CountryEn     string `json:"country_en,omitempty"`
+	RegionRu      string `json:"region_ru,omitempty"`
+	RegionEn      string `json:"region_en,omitempty"`
+	LocalityRu    string `json:"locality_ru,omitempty"`
+	LocalityEn    string `json:"locality_en,omitempty"`
 	IsRussian     bool   `json:"is_russian"`
 	Famous        bool   `json:"famous,omitempty"`
 	DescriptionRu string `json:"description_ru,omitempty"`
@@ -132,5 +146,4 @@ type FilterParams struct {
 	Sort         string  `json:"sort" form:"sort"`
 	Order        string  `json:"order" form:"order"`
 	SearchQuery  string  `json:"q" form:"q"`
-	// TODO: добавить Type EntityType `json:"type" form:"type"`
 }
