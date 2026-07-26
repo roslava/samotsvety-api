@@ -45,6 +45,7 @@ func NewMineralHandler(repo repository.MineralRepository) *MineralHandler {
 // @Param        rarity        query  string  false  "Редкость"
 // @Param        mineral_group query  string  false  "Группа"
 // @Param        color         query  string  false  "Цвет"
+// @Param        letter        query  string  false  "Первая буква названия (ru/en, зависит от lang)"
 // @Param        hardness_min  query  number  false  "Минимальная твёрдость"
 // @Param        hardness_max  query  number  false  "Максимальная твёрдость"
 // @Success      200  {object}  ListResponse
@@ -86,6 +87,7 @@ func (h *MineralHandler) ListMinerals(c *gin.Context) {
 		Rarity:       c.Query("rarity"),
 		MineralGroup: c.Query("mineral_group"),
 		Color:        c.Query("color"),
+		Letter:       c.Query("letter"),
 	}
 
 	// Для hardness_min / hardness_max можно добавить отдельно, если нужно
