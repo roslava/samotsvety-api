@@ -226,6 +226,18 @@ func (r *MemoryMineralRepository) matchesFilters(mineral *domain.Mineral, filter
 		}
 	}
 
+	// Фильтр по первой букве названия — привязан к языку ответа (ru/en),
+	// как и остальные языкозависимые фильтры здесь.
+	if filters.Letter != "" {
+		name := mineral.I18n.Ru.Name
+		if filters.Lang == "en" {
+			name = mineral.I18n.En.Name
+		}
+		if !strings.HasPrefix(strings.ToLower(name), strings.ToLower(filters.Letter)) {
+			return false
+		}
+	}
+
 	// Фильтр по русским месторождениям
 	if filters.RussianOnly {
 		russianFound := false
