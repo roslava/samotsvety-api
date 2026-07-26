@@ -241,7 +241,6 @@ func (h *MineralHandler) CreateMineral(c *gin.Context) {
 		MainImageURL:    req.MainImageURL,
 		ThumbnailURL:    thumbnailURL,
 		Gallery:         req.Gallery,
-		SafetyNotes:     req.SafetyNotes,
 		RelatedMinerals: req.RelatedMinerals,
 		CreatedAt:       now,
 		UpdatedAt:       now,
@@ -312,9 +311,6 @@ func (h *MineralHandler) UpdateMineral(c *gin.Context) {
 	}
 	if req.Gallery != nil {
 		mineral.Gallery = *req.Gallery
-	}
-	if req.SafetyNotes != nil {
-		mineral.SafetyNotes = *req.SafetyNotes
 	}
 	if req.RelatedMinerals != nil {
 		mineral.RelatedMinerals = *req.RelatedMinerals
