@@ -3,6 +3,8 @@ package handler
 import "github.com/roslava/samotsvety-api/internal/domain"
 
 // CreateMineralRequest — DTO для создания минерала
+// SafetyNotes больше не отдельное поле — он теперь внутри I18n.Ru/En.SafetyNotes,
+// как и остальной языкозависимый текст (заполняется через поле i18n целиком).
 type CreateMineralRequest struct {
 	Slug            string                `json:"slug" validate:"required,alphanumdash"`
 	Type            domain.EntityType     `json:"type" validate:"required,oneof=mineral rock gem_variety organic"`
@@ -12,7 +14,6 @@ type CreateMineralRequest struct {
 	MainImageURL    string                `json:"main_image_url,omitempty"`
 	ThumbnailURL    string                `json:"thumbnail_url,omitempty"`
 	Gallery         []domain.GalleryImage `json:"gallery,omitempty"`
-	SafetyNotes     string                `json:"safety_notes,omitempty"`
 	RelatedMinerals []string              `json:"related_minerals,omitempty"`
 }
 
@@ -25,8 +26,7 @@ type UpdateMineralRequest struct {
 	Localities      *[]domain.Locality     `json:"localities,omitempty"` // указатель — важно!
 	MainImageURL    *string                `json:"main_image_url,omitempty"`
 	ThumbnailURL    *string                `json:"thumbnail_url,omitempty"`
-	Gallery         *[]domain.GalleryImage `json:"gallery,omitempty"` // указатель
-	SafetyNotes     *string                `json:"safety_notes,omitempty"`
+	Gallery         *[]domain.GalleryImage `json:"gallery,omitempty"`          // указатель
 	RelatedMinerals *[]string              `json:"related_minerals,omitempty"` // указатель
 }
 
