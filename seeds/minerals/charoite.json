@@ -2,9 +2,6 @@
   "slug": "charoite",
   "scientific": {
     "chemical_formula": "K(Ca,Na)₂Si₄O₁₀(OH,F)·H₂O",
-    "mineral_group": "силикаты",
-    "crystal_system": "моноклинная",
-    "crystal_habit": "волокнистый, радиально-лучистый, плотный",
     "hardness": {
       "min": 5,
       "max": 6
@@ -13,13 +10,7 @@
       "min": 2.54,
       "max": 2.78
     },
-    "streak": "белая",
-    "luster": "стеклянный, перламутровый",
-    "transparency": "полупрозрачный до непрозрачного",
-    "cleavage": "совершенная",
-    "fracture": "неровный",
-    "rarity": "rare",
-    "identification_tips": "Характерный сиренево-фиолетовый цвет с волокнистой структурой"
+    "rarity": "rare"
   },
   "i18n": {
     "ru": {
@@ -28,6 +19,16 @@
       "color": ["сиреневый", "фиолетовый", "лавандовый"],
       "color_description": "Уникальный сиренево-фиолетовый цвет с характерным волокнистым рисунком",
       "lore": "Чароит — один из самых молодых открытых самоцветов. Найден в 1948 году на реке Чара в Якутии. Является эндемиком России и одним из символов отечественной минералогии.",
+      "mineral_group": "силикаты",
+      "crystal_system": "моноклинная",
+      "crystal_habit": "волокнистый, радиально-лучистый, плотный",
+      "streak": "белая",
+      "luster": "стеклянный, перламутровый",
+      "transparency": "полупрозрачный до непрозрачного",
+      "cleavage": "совершенная",
+      "fracture": "неровный",
+      "identification_tips": "Характерный сиренево-фиолетовый цвет с волокнистой структурой",
+      "safety_notes": "",
       "esoteric": {
         "metaphysical_properties": ["духовное развитие", "защита", "гармония", "очищение"],
         "chakras": ["теменная чакра", "сердечная чакра"],
@@ -40,6 +41,16 @@
       "color": ["lilac", "violet", "lavender"],
       "color_description": "Unique lilac-violet colour with characteristic fibrous pattern",
       "lore": "Charoite is one of the youngest discovered gemstones. Found in 1948 on the Chara River in Yakutia. It is endemic to Russia and one of the symbols of Russian mineralogy.",
+      "mineral_group": "silicates",
+      "crystal_system": "monoclinic",
+      "crystal_habit": "fibrous, radial-fanning, massive",
+      "streak": "white",
+      "luster": "vitreous, pearly",
+      "transparency": "translucent to opaque",
+      "cleavage": "perfect",
+      "fracture": "uneven",
+      "identification_tips": "Distinctive lilac-violet colour with a fibrous structure",
+      "safety_notes": "",
       "esoteric": {
         "metaphysical_properties": ["spiritual growth", "protection", "harmony", "purification"],
         "chakras": ["crown chakra", "heart chakra"],
@@ -48,7 +59,6 @@
     }
   },
   "main_image_url": "https://example.com/images/charoite-hero.jpg",
-  "safety_notes": "",
   "localities": [],
   "gallery": [],
   "related_minerals": []
