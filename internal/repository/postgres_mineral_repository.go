@@ -110,6 +110,21 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 		argIdx++
 	}
 
+	if filters.Letter != "" {
+		// Фильтр "начинается на букву" — привязан к текущему языку ответа (ru/en),
+		// как и Color/MineralGroup выше. Экранируем спецсимволы ILIKE на всякий
+		// случай (%, _), хотя фронтенд всегда шлёт ровно одну букву алфавита.
+		escaped := strings.NewReplacer("%", `\%`, "_", `\_`).Replace(filters.Letter)
+		langKey := "ru"
+		if filters.Lang == "en" {
+			langKey = "en"
+		}
+		conditions = append(conditions, fmt.Sprintf(
+			"i18n->'%s'->>'name' ILIKE $%d", langKey, argIdx))
+		args = append(args, escaped+"%")
+		argIdx++
+	}
+
 	if filters.RussianOnly {
 		conditions = append(conditions, `EXISTS (
 			SELECT 1 FROM jsonb_array_elements(COALESCE(localities, '[]'::jsonb)) AS loc 
