@@ -1,3 +1,4 @@
+// internal/repository/postgres_mineral_repository.go
 package repository
 
 import (
@@ -24,7 +25,7 @@ func NewPostgresMineralRepository(db *sqlx.DB) *PostgresMineralRepository {
 
 func (r *PostgresMineralRepository) GetBySlug(ctx context.Context, slug, lang, view string) (*domain.Mineral, error) {
 	var m mineralRow
-	query := `SELECT slug, scientific, i18n, main_image_url, thumbnail_url, safety_notes, localities, gallery, related_minerals, created_at, updated_at 
+	query := `SELECT slug, scientific, i18n, main_image_url, thumbnail_url, localities, gallery, related_minerals, created_at, updated_at 
 	          FROM minerals WHERE slug = $1`
 
 	err := r.db.GetContext(ctx, &m, query, slug)
@@ -87,7 +88,10 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 	}
 
 	if filters.MineralGroup != "" {
-		conditions = append(conditions, fmt.Sprintf("scientific->>'mineral_group' ILIKE $%d", argIdx))
+		// mineral_group теперь языкозависимое поле внутри i18n — ищем в обеих версиях,
+		// чтобы фильтр работал независимо от того, на каком языке ввёл админ.
+		conditions = append(conditions, fmt.Sprintf(
+			"(i18n->'ru'->>'mineral_group' ILIKE $%d OR i18n->'en'->>'mineral_group' ILIKE $%d)", argIdx, argIdx))
 		args = append(args, "%"+filters.MineralGroup+"%")
 		argIdx++
 	}
@@ -136,7 +140,7 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 	}
 
 	query := fmt.Sprintf(`
-		SELECT slug, scientific, i18n, main_image_url, thumbnail_url, safety_notes,
+		SELECT slug, scientific, i18n, main_image_url, thumbnail_url,
 		       localities, gallery, related_minerals, created_at, updated_at
 		FROM minerals
 		%s
@@ -192,14 +196,13 @@ func (r *PostgresMineralRepository) Create(ctx context.Context, mineral *domain.
 			main_image_url, 
 			thumbnail_url,
 			gallery, 
-			safety_notes, 
 			related_minerals,
 			created_at,
 			updated_at
 		) VALUES (
 			$1, $2, $3, $4, 
 			$5, $6, $7, $8,
-			$9, $10, $11
+			$9, $10
 		)
 	`
 
@@ -211,7 +214,6 @@ func (r *PostgresMineralRepository) Create(ctx context.Context, mineral *domain.
 		mineral.MainImageURL,
 		mineral.ThumbnailURL,
 		galleryJSON,
-		mineral.SafetyNotes,
 		pq.StringArray(mineral.RelatedMinerals),
 		mineral.CreatedAt,
 		mineral.UpdatedAt,
@@ -229,8 +231,7 @@ type mineralRow struct {
 	Scientific      []byte         `db:"scientific"`
 	I18n            []byte         `db:"i18n"`
 	MainImageURL    string         `db:"main_image_url"`
-	ThumbnailURL    *string        `db:"thumbnail_url"` // ← измени на *string
-	SafetyNotes     string         `db:"safety_notes"`
+	ThumbnailURL    *string        `db:"thumbnail_url"`
 	Localities      []byte         `db:"localities"`
 	Gallery         []byte         `db:"gallery"`
 	RelatedMinerals pq.StringArray `db:"related_minerals"`
@@ -261,7 +262,6 @@ func (row mineralRow) toMineral() *domain.Mineral {
 		I18n:            i18n,
 		MainImageURL:    row.MainImageURL,
 		ThumbnailURL:    row.ThumbnailURL,
-		SafetyNotes:     row.SafetyNotes,
 		Localities:      localities,
 		Gallery:         gallery,
 		RelatedMinerals: row.RelatedMinerals,
@@ -300,7 +300,6 @@ func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, vie
 	if lang == "" {
 		lang = "ru"
 	}
-	// Don't set a default view - allow all data by default
 	if limit == 0 {
 		limit = 20
 	}
@@ -322,7 +321,7 @@ func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, vie
 	`
 
 	querySQL := fmt.Sprintf(`
-		SELECT slug, scientific, i18n, main_image_url, thumbnail_url, safety_notes,
+		SELECT slug, scientific, i18n, main_image_url, thumbnail_url,
 		       localities, gallery, related_minerals, created_at, updated_at
 		FROM minerals
 		WHERE %s
@@ -355,7 +354,7 @@ func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, vie
 func (r *PostgresMineralRepository) GetFilters(ctx context.Context) (*FilterValues, error) {
 	fv := &FilterValues{}
 
-	// Rarity
+	// Rarity — язык не важен, оставили в scientific
 	var rarities []string
 	if err := r.db.SelectContext(ctx, &rarities, `
 		SELECT DISTINCT scientific->>'rarity' 
@@ -367,12 +366,12 @@ func (r *PostgresMineralRepository) GetFilters(ctx context.Context) (*FilterValu
 	}
 	fv.Rarities = rarities
 
-	// Mineral Groups
+	// Mineral Groups — теперь в i18n; берём русскую версию для админ-фильтра
 	var groups []string
 	if err := r.db.SelectContext(ctx, &groups, `
-		SELECT DISTINCT scientific->>'mineral_group' 
+		SELECT DISTINCT i18n->'ru'->>'mineral_group'
 		FROM minerals 
-		WHERE scientific->>'mineral_group' IS NOT NULL 
+		WHERE i18n->'ru'->>'mineral_group' IS NOT NULL AND i18n->'ru'->>'mineral_group' != ''
 		ORDER BY 1
 	`); err != nil {
 		return nil, fmt.Errorf("failed to get mineral_groups: %w", err)
@@ -408,12 +407,12 @@ func (r *PostgresMineralRepository) GetFilters(ctx context.Context) (*FilterValu
 	}
 	fv.Colors = colors
 
-	// Countries
+	// Countries — раньше country, теперь country_ru
 	var countries []string
 	if err := r.db.SelectContext(ctx, &countries, `
-		SELECT DISTINCT loc->>'country'
+		SELECT DISTINCT loc->>'country_ru'
 		FROM minerals, jsonb_array_elements(COALESCE(localities, '[]'::jsonb)) AS loc
-		WHERE loc->>'country' IS NOT NULL
+		WHERE loc->>'country_ru' IS NOT NULL AND loc->>'country_ru' != ''
 		ORDER BY 1
 	`); err != nil {
 		countries = []string{}
@@ -450,10 +449,9 @@ func (r *PostgresMineralRepository) Update(ctx context.Context, oldSlug string, 
 			main_image_url = $5,
 			thumbnail_url = $6,
 			gallery = $7,
-			safety_notes = $8,
-			related_minerals = $9,
+			related_minerals = $8,
 			updated_at = NOW()
-		WHERE slug = $10`
+		WHERE slug = $9`
 
 	_, err := r.db.ExecContext(ctx, query,
 		mineral.Slug,
@@ -463,7 +461,6 @@ func (r *PostgresMineralRepository) Update(ctx context.Context, oldSlug string, 
 		mineral.MainImageURL,
 		mineral.ThumbnailURL,
 		galleryJSON,
-		mineral.SafetyNotes,
 		pq.StringArray(mineral.RelatedMinerals),
 		oldSlug,
 	)
