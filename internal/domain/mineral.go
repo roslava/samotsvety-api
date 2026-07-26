@@ -140,6 +140,7 @@ type FilterParams struct {
 	HardnessMax  float64 `json:"hardness_max" form:"hardness_max"`
 	Color        string  `json:"color" form:"color"`
 	MineralGroup string  `json:"mineral_group" form:"mineral_group"`
+	Letter       string  `json:"letter" form:"letter"`
 	RussianOnly  bool    `json:"russian_only" form:"russian_only"`
 	Limit        int     `json:"limit" form:"limit" validate:"min=1,max=100"`
 	Page         int     `json:"page" form:"page" validate:"min=1"`
