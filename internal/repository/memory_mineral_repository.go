@@ -126,16 +126,20 @@ func (r *MemoryMineralRepository) Search(ctx context.Context, query, lang, view 
 	return results, total, nil
 }
 
-// GetFilters возвращает доступные значения для фильтров
-func (r *MemoryMineralRepository) GetFilters(ctx context.Context) (*FilterValues, error) {
+// GetFilters возвращает доступные значения для фильтров.
+// lang влияет только на список подробных цветов — они языкозависимы
+// (i18n.ru/en.color); base_colors — фиксированный языконезависимый enum.
+func (r *MemoryMineralRepository) GetFilters(ctx context.Context, lang string) (*FilterValues, error) {
 	filters := &FilterValues{
 		Rarities:      []string{},
 		Colors:        []string{},
+		BaseColors:    []string{},
 		MineralGroups: []string{},
 		Countries:     []string{},
 	}
 
 	rarityMap := make(map[string]bool)
+	baseColorMap := make(map[string]bool)
 	colorMap := make(map[string]bool)
 	groupMap := make(map[string]bool)
 	countryMap := make(map[string]bool)
@@ -147,9 +151,19 @@ func (r *MemoryMineralRepository) GetFilters(ctx context.Context) (*FilterValues
 		// Собираем редкости
 		rarityMap[string(mineral.Scientific.Rarity)] = true
 
-		// Собираем цвета
-		if mineral.I18n.Ru.Name != "" {
-			for _, color := range mineral.I18n.Ru.Color {
+		// Собираем базовые цвета (enum из scientific)
+		if mineral.Scientific.BaseColor != "" {
+			baseColorMap[string(mineral.Scientific.BaseColor)] = true
+		}
+
+		// Собираем подробные цвета — из блока нужного языка, с фоллбэком на ru,
+		// если для en перевода ещё нет (как и остальные не-обязательные поля).
+		colorLangData := mineral.I18n.Ru
+		if lang == "en" {
+			colorLangData = mineral.I18n.En
+		}
+		if colorLangData.Name != "" {
+			for _, color := range colorLangData.Color {
 				colorMap[color] = true
 			}
 		}
@@ -179,6 +193,9 @@ func (r *MemoryMineralRepository) GetFilters(ctx context.Context) (*FilterValues
 	for rarity := range rarityMap {
 		filters.Rarities = append(filters.Rarities, rarity)
 	}
+	for bc := range baseColorMap {
+		filters.BaseColors = append(filters.BaseColors, bc)
+	}
 	for color := range colorMap {
 		filters.Colors = append(filters.Colors, color)
 	}
@@ -204,6 +221,11 @@ func (r *MemoryMineralRepository) matchesFilters(mineral *domain.Mineral, filter
 		return false
 	}
 
+	// Фильтр по базовому цвету — точное совпадение enum, языконезависимо
+	if filters.BaseColor != "" && string(mineral.Scientific.BaseColor) != filters.BaseColor {
+		return false
+	}
+
 	// Фильтр по твёрдости
 	if filters.HardnessMin > 0 && mineral.Scientific.Hardness.Min < filters.HardnessMin {
 		return false
@@ -212,10 +234,14 @@ func (r *MemoryMineralRepository) matchesFilters(mineral *domain.Mineral, filter
 		return false
 	}
 
-	// Фильтр по цвету (простой поиск в названии)
+	// Фильтр по подробному цвету — привязан к языку ответа (ru/en), как и Letter ниже
 	if filters.Color != "" {
+		colorLangData := mineral.I18n.Ru
+		if filters.Lang == "en" {
+			colorLangData = mineral.I18n.En
+		}
 		colorFound := false
-		for _, color := range mineral.I18n.Ru.Color {
+		for _, color := range colorLangData.Color {
 			if strings.Contains(strings.ToLower(color), strings.ToLower(filters.Color)) {
 				colorFound = true
 				break

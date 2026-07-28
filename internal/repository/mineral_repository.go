@@ -19,8 +19,10 @@ type MineralRepository interface {
 	// Search выполняет полнотекстовый поиск
 	Search(ctx context.Context, query, lang, view string, limit, offset int) ([]domain.Mineral, int, error)
 
-	// GetFilters возвращает доступные значения для фильтров
-	GetFilters(ctx context.Context) (*FilterValues, error)
+	// GetFilters возвращает доступные значения для фильтров.
+	// lang влияет на список подробных цветов (i18n-поле) — редкости, твёрдость
+	// и базовые цвета (base_color) языконезависимы.
+	GetFilters(ctx context.Context, lang string) (*FilterValues, error)
 
 	// Admin CRUD
 	Create(ctx context.Context, mineral *domain.Mineral) error
@@ -32,6 +34,7 @@ type MineralRepository interface {
 type FilterValues struct {
 	Rarities      []string `json:"rarities"`
 	Colors        []string `json:"colors"`
+	BaseColors    []string `json:"base_colors"`
 	MineralGroups []string `json:"mineral_groups"`
 	HardnessRange struct {
 		Min float64 `json:"min"`

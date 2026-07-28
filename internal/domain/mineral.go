@@ -36,6 +36,30 @@ type GemEntity struct {
 // Mineral — alias для обратной совместимости на переходный период
 type Mineral = GemEntity
 
+// BaseColor — абстрагированная категория цвета для фильтра-палитры (13 базовых
+// оттенков, как в референсе). Языконезависима: подписи локализуются на фронте
+// (STRINGS.color_<значение>), сам же цвет — фиксированный набор значений, а не
+// свободный текст, чтобы фильтр не расползался вместе с ростом каталога.
+// Подробный, "человеческий" цвет по-прежнему живёт в I18n.Ru/En.Color —
+// это поле его не заменяет, а классифицирует для UI-фильтра.
+type BaseColor string
+
+const (
+	BaseColorRed        BaseColor = "red"
+	BaseColorBlack      BaseColor = "black"
+	BaseColorBiColor    BaseColor = "bi_color"
+	BaseColorBlue       BaseColor = "blue"
+	BaseColorBrown      BaseColor = "brown"
+	BaseColorGreen      BaseColor = "green"
+	BaseColorYellow     BaseColor = "yellow"
+	BaseColorGrey       BaseColor = "grey"
+	BaseColorPurple     BaseColor = "purple"
+	BaseColorWhite      BaseColor = "white"
+	BaseColorPink       BaseColor = "pink"
+	BaseColorMulticolor BaseColor = "multicolor"
+	BaseColorOrange     BaseColor = "orange"
+)
+
 // Scientific — по-настоящему языконезависимые данные: формула, числа, категория.
 // Всё, что раньше тут лежало текстом на русском (группа, система, блеск и т.д.),
 // переехало в LangData ниже — там ему самое место.
@@ -44,6 +68,7 @@ type Scientific struct {
 	Hardness        Hardness        `json:"hardness" validate:"required"`
 	SpecificGravity SpecificGravity `json:"specific_gravity" validate:"required"`
 	Rarity          Rarity          `json:"rarity" validate:"required,oneof=common uncommon rare very_rare"`
+	BaseColor       BaseColor       `json:"base_color,omitempty" validate:"omitempty,oneof=red black bi_color blue brown green yellow grey purple white pink multicolor orange"`
 }
 
 type Hardness struct {
@@ -139,6 +164,7 @@ type FilterParams struct {
 	HardnessMin  float64 `json:"hardness_min" form:"hardness_min"`
 	HardnessMax  float64 `json:"hardness_max" form:"hardness_max"`
 	Color        string  `json:"color" form:"color"`
+	BaseColor    string  `json:"base_color" form:"base_color"`
 	MineralGroup string  `json:"mineral_group" form:"mineral_group"`
 	Letter       string  `json:"letter" form:"letter"`
 	RussianOnly  bool    `json:"russian_only" form:"russian_only"`

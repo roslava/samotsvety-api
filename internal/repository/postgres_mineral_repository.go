@@ -76,6 +76,14 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 		argIdx++
 	}
 
+	if filters.BaseColor != "" {
+		// base_color — фиксированный enum в языконезависимой части (scientific),
+		// поэтому сравниваем точным равенством, без ILIKE/wildcards.
+		conditions = append(conditions, fmt.Sprintf("scientific->>'base_color' = $%d", argIdx))
+		args = append(args, filters.BaseColor)
+		argIdx++
+	}
+
 	if filters.HardnessMin > 0 {
 		conditions = append(conditions, fmt.Sprintf("(scientific->'hardness'->>'min')::float >= $%d", argIdx))
 		args = append(args, filters.HardnessMin)
@@ -366,7 +374,15 @@ func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, vie
 	return results, total, nil
 }
 
-func (r *PostgresMineralRepository) GetFilters(ctx context.Context) (*FilterValues, error) {
+func (r *PostgresMineralRepository) GetFilters(ctx context.Context, lang string) (*FilterValues, error) {
+	if lang == "" {
+		lang = "ru"
+	}
+	langKey := "ru"
+	if lang == "en" {
+		langKey = "en"
+	}
+
 	fv := &FilterValues{}
 
 	// Rarity — язык не важен, оставили в scientific
@@ -380,6 +396,18 @@ func (r *PostgresMineralRepository) GetFilters(ctx context.Context) (*FilterValu
 		return nil, fmt.Errorf("failed to get rarities: %w", err)
 	}
 	fv.Rarities = rarities
+
+	// Base colors — фиксированный enum, языконезависим (scientific->>'base_color')
+	var baseColors []string
+	if err := r.db.SelectContext(ctx, &baseColors, `
+		SELECT DISTINCT scientific->>'base_color'
+		FROM minerals
+		WHERE scientific->>'base_color' IS NOT NULL AND scientific->>'base_color' != ''
+		ORDER BY 1
+	`); err != nil {
+		return nil, fmt.Errorf("failed to get base_colors: %w", err)
+	}
+	fv.BaseColors = baseColors
 
 	// Mineral Groups — теперь в i18n; берём русскую версию для админ-фильтра
 	var groups []string
@@ -410,14 +438,16 @@ func (r *PostgresMineralRepository) GetFilters(ctx context.Context) (*FilterValu
 	fv.HardnessRange.Min = hardness.Min
 	fv.HardnessRange.Max = hardness.Max
 
-	// Colors
+	// Colors — подробные, по выбранному языку (оставлены для карточки/детальной
+	// страницы; сам фильтр-палитра теперь использует base_colors выше)
 	var colors []string
-	if err := r.db.SelectContext(ctx, &colors, `
-		SELECT DISTINCT jsonb_array_elements_text(i18n->'ru'->'color')
+	colorsQuery := fmt.Sprintf(`
+		SELECT DISTINCT jsonb_array_elements_text(i18n->'%s'->'color')
 		FROM minerals
-		WHERE i18n->'ru'->'color' IS NOT NULL
+		WHERE i18n->'%s'->'color' IS NOT NULL
 		ORDER BY 1
-	`); err != nil {
+	`, langKey, langKey)
+	if err := r.db.SelectContext(ctx, &colors, colorsQuery); err != nil {
 		return nil, fmt.Errorf("failed to get colors: %w", err)
 	}
 	fv.Colors = colors

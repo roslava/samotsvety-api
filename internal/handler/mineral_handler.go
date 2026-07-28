@@ -44,7 +44,8 @@ func NewMineralHandler(repo repository.MineralRepository) *MineralHandler {
 // @Param        russian_only  query  bool    false  "Только российские"
 // @Param        rarity        query  string  false  "Редкость"
 // @Param        mineral_group query  string  false  "Группа"
-// @Param        color         query  string  false  "Цвет"
+// @Param        color         query  string  false  "Подробный цвет (свободный текст)"
+// @Param        base_color    query  string  false  "Базовый цвет (фиксированный enum)"  Enums(red,black,bi_color,blue,brown,green,yellow,grey,purple,white,pink,multicolor,orange)
 // @Param        letter        query  string  false  "Первая буква названия (ru/en, зависит от lang)"
 // @Param        hardness_min  query  number  false  "Минимальная твёрдость"
 // @Param        hardness_max  query  number  false  "Максимальная твёрдость"
@@ -87,6 +88,7 @@ func (h *MineralHandler) ListMinerals(c *gin.Context) {
 		Rarity:       c.Query("rarity"),
 		MineralGroup: c.Query("mineral_group"),
 		Color:        c.Query("color"),
+		BaseColor:    c.Query("base_color"),
 		Letter:       c.Query("letter"),
 	}
 
@@ -191,13 +193,16 @@ func (h *MineralHandler) SearchMinerals(c *gin.Context) {
 
 // GetFilters godoc
 // @Summary      Получить значения для фильтров
-// @Description  Возвращает списки доступных значений для фронтенда
+// @Description  Возвращает списки доступных значений для фронтенда (подробные цвета зависят от lang, base_colors — нет)
 // @Tags         filters
 // @Produce      json
+// @Param        lang  query  string  false  "Язык"  default=ru  Enums(ru,en)
 // @Success      200  {object} repository.FilterValues
 // @Router       /api/v1/filters [get]
 func (h *MineralHandler) GetFilters(c *gin.Context) {
-	filters, err := h.repo.GetFilters(c.Request.Context())
+	lang := c.DefaultQuery("lang", "ru")
+
+	filters, err := h.repo.GetFilters(c.Request.Context(), lang)
 	if err != nil {
 		slog.Error("GetFilters failed", "error", err)
 		RespondInternalError(c, "Failed to get filters")
