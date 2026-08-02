@@ -5,9 +5,10 @@ import (
 
 	"github.com/roslava/samotsvety-api/internal/middleware"
 	"github.com/roslava/samotsvety-api/internal/repository"
+	"github.com/roslava/samotsvety-api/internal/storage"
 )
 
-func NewRouter(mineralRepo repository.MineralRepository, postRepo repository.PostRepository) *gin.Engine {
+func NewRouter(mineralRepo repository.MineralRepository, postRepo repository.PostRepository, mediaStorage storage.MediaStorage) *gin.Engine {
 	router := gin.Default()
 
 	// Middleware
@@ -17,6 +18,7 @@ func NewRouter(mineralRepo repository.MineralRepository, postRepo repository.Pos
 
 	mineralHandler := NewMineralHandler(mineralRepo)
 	postHandler := NewPostHandler(postRepo)
+	mediaHandler := NewMediaHandler(mediaStorage)
 
 	// API v1
 	v1 := router.Group("/api/v1")
@@ -59,6 +61,13 @@ func NewRouter(mineralRepo repository.MineralRepository, postRepo repository.Pos
 		v1.GET("/search", mineralHandler.SearchMinerals)
 		v1.GET("/filters", mineralHandler.GetFilters)
 		v1.GET("/search/posts", postHandler.SearchPosts)
+
+		// === Медиа (загрузка иллюстраций для статей) — только админ ===
+		media := v1.Group("/media")
+		media.Use(middleware.APIKeyAuth())
+		{
+			media.POST("", mediaHandler.UploadMedia)
+		}
 	}
 
 	// Healthcheck

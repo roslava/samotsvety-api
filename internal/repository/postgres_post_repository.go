@@ -25,7 +25,7 @@ func NewPostgresPostRepository(db *sqlx.DB) *PostgresPostRepository {
 
 func (r *PostgresPostRepository) GetBySlug(ctx context.Context, slug, lang string) (*domain.Post, error) {
 	var p postRow
-	query := `SELECT id, slug, type, i18n, cover_image, gem_slugs, tags,
+	query := `SELECT id, slug, type, i18n, cover_image, content_blocks, gem_slugs, tags,
 	                 published_at, updated_at, is_published, author
 	          FROM posts WHERE slug = $1`
 
@@ -94,7 +94,7 @@ func (r *PostgresPostRepository) List(ctx context.Context, filters PostFilterPar
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, slug, type, i18n, cover_image, gem_slugs, tags,
+		SELECT id, slug, type, i18n, cover_image, content_blocks, gem_slugs, tags,
 		       published_at, updated_at, is_published, author
 		FROM posts
 		%s
@@ -132,7 +132,7 @@ func (r *PostgresPostRepository) Search(ctx context.Context, query, lang string,
 	searchQuery := query + ":*"
 
 	querySQL := `
-		SELECT id, slug, type, i18n, cover_image, gem_slugs, tags,
+		SELECT id, slug, type, i18n, cover_image, content_blocks, gem_slugs, tags,
 		       published_at, updated_at, is_published, author
 		FROM posts
 		WHERE is_published = true
@@ -169,35 +169,40 @@ func (r *PostgresPostRepository) Search(ctx context.Context, query, lang string,
 }
 
 type postRow struct {
-	ID          string         `db:"id"`
-	Slug        string         `db:"slug"`
-	Type        string         `db:"type"`
-	I18n        []byte         `db:"i18n"`
-	CoverImage  string         `db:"cover_image"`
-	GemSlugs    pq.StringArray `db:"gem_slugs"`
-	Tags        pq.StringArray `db:"tags"`
-	PublishedAt *time.Time     `db:"published_at"`
-	UpdatedAt   time.Time      `db:"updated_at"`
-	IsPublished bool           `db:"is_published"`
-	Author      string         `db:"author"`
+	ID            string         `db:"id"`
+	Slug          string         `db:"slug"`
+	Type          string         `db:"type"`
+	I18n          []byte         `db:"i18n"`
+	CoverImage    string         `db:"cover_image"`
+	ContentBlocks []byte         `db:"content_blocks"`
+	GemSlugs      pq.StringArray `db:"gem_slugs"`
+	Tags          pq.StringArray `db:"tags"`
+	PublishedAt   *time.Time     `db:"published_at"`
+	UpdatedAt     time.Time      `db:"updated_at"`
+	IsPublished   bool           `db:"is_published"`
+	Author        string         `db:"author"`
 }
 
 func (row postRow) toPost() *domain.Post {
 	var i18n domain.PostI18n
 	json.Unmarshal(row.I18n, &i18n)
 
+	var blocks []domain.ContentBlock
+	json.Unmarshal(row.ContentBlocks, &blocks)
+
 	return &domain.Post{
-		ID:          row.ID,
-		Slug:        row.Slug,
-		Type:        domain.PostType(row.Type),
-		I18n:        i18n,
-		CoverImage:  row.CoverImage,
-		GemSlugs:    row.GemSlugs,
-		Tags:        row.Tags,
-		PublishedAt: row.PublishedAt,
-		UpdatedAt:   row.UpdatedAt,
-		IsPublished: row.IsPublished,
-		Author:      row.Author,
+		ID:            row.ID,
+		Slug:          row.Slug,
+		Type:          domain.PostType(row.Type),
+		I18n:          i18n,
+		CoverImage:    row.CoverImage,
+		ContentBlocks: blocks,
+		GemSlugs:      row.GemSlugs,
+		Tags:          row.Tags,
+		PublishedAt:   row.PublishedAt,
+		UpdatedAt:     row.UpdatedAt,
+		IsPublished:   row.IsPublished,
+		Author:        row.Author,
 	}
 }
 
@@ -213,13 +218,17 @@ func (r *PostgresPostRepository) Create(ctx context.Context, post *domain.Post) 
 	}
 
 	i18nJSON, _ := json.Marshal(post.I18n)
+	blocksJSON, _ := json.Marshal(post.ContentBlocks)
+	if post.ContentBlocks == nil {
+		blocksJSON = []byte("[]")
+	}
 
 	query := `
 		INSERT INTO posts (
-			slug, type, i18n, cover_image, gem_slugs, tags,
+			slug, type, i18n, cover_image, content_blocks, gem_slugs, tags,
 			published_at, updated_at, is_published, author
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 		)
 	`
 
@@ -228,6 +237,7 @@ func (r *PostgresPostRepository) Create(ctx context.Context, post *domain.Post) 
 		post.Type,
 		i18nJSON,
 		post.CoverImage,
+		blocksJSON,
 		pq.StringArray(post.GemSlugs),
 		pq.StringArray(post.Tags),
 		post.PublishedAt,
@@ -257,19 +267,24 @@ func (r *PostgresPostRepository) Update(ctx context.Context, oldSlug string, pos
 	}
 
 	i18nJSON, _ := json.Marshal(post.I18n)
+	blocksJSON, _ := json.Marshal(post.ContentBlocks)
+	if post.ContentBlocks == nil {
+		blocksJSON = []byte("[]")
+	}
 
 	query := `
 		UPDATE posts
 		SET slug = $1, type = $2, i18n = $3,
-		    cover_image = $4, gem_slugs = $5, tags = $6,
-		    published_at = $7, updated_at = NOW(), is_published = $8, author = $9
-		WHERE slug = $10`
+		    cover_image = $4, content_blocks = $5, gem_slugs = $6, tags = $7,
+		    published_at = $8, updated_at = NOW(), is_published = $9, author = $10
+		WHERE slug = $11`
 
 	_, err := r.db.ExecContext(ctx, query,
 		post.Slug,
 		post.Type,
 		i18nJSON,
 		post.CoverImage,
+		blocksJSON,
 		pq.StringArray(post.GemSlugs),
 		pq.StringArray(post.Tags),
 		post.PublishedAt,

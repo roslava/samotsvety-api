@@ -15,6 +15,7 @@ import (
 	"github.com/roslava/samotsvety-api/internal/config"
 	"github.com/roslava/samotsvety-api/internal/handler"
 	"github.com/roslava/samotsvety-api/internal/repository"
+	"github.com/roslava/samotsvety-api/internal/storage"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -48,8 +49,16 @@ func main() {
 	mineralRepo := repository.NewPostgresMineralRepository(db)
 	postRepo := repository.NewPostgresPostRepository(db) // ← Добавили
 
+	// Хранилище медиа (Yandex Object Storage). Если не настроено — эндпоинт загрузки
+	// вернёт 503, остальной API продолжит работать как обычно.
+	mediaStorage, err := storage.NewYandexS3Storage(context.Background(), cfg.Storage)
+	if err != nil {
+		slog.Warn("Media storage not configured, upload endpoint will be unavailable", "error", err)
+		mediaStorage = nil
+	}
+
 	// Роутер
-	router := handler.NewRouter(mineralRepo, postRepo) // ← Обновили
+	router := handler.NewRouter(mineralRepo, postRepo, mediaStorage) // ← Обновили
 
 	// Swagger UI
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))

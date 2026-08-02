@@ -17,6 +17,7 @@ type Config struct {
 	AppEnv   string
 	AppPort  string
 	Database DatabaseConfig
+	Storage  StorageConfig
 }
 
 // DatabaseConfig содержит параметры подключения к БД
@@ -27,6 +28,18 @@ type DatabaseConfig struct {
 	Password string
 	Name     string
 	SSLMode  string
+}
+
+// StorageConfig — параметры Yandex Object Storage (S3-совместимое) для загрузки медиа статей.
+// Yandex Object Storage совместим с S3 API, поэтому используется обычный AWS SDK for Go
+// с кастомным endpoint — отдельная интеграция не нужна.
+type StorageConfig struct {
+	Endpoint  string // https://storage.yandexcloud.net
+	Region    string // ru-central1
+	Bucket    string
+	AccessKey string
+	SecretKey string
+	PublicURL string // базовый URL, по которому файлы отдаются публично (обычно https://<bucket>.storage.yandexcloud.net или CDN-домен)
 }
 
 // LoadConfig загружает конфигурацию из переменных окружения
@@ -41,6 +54,14 @@ func LoadConfig() *Config {
 			Password: getEnvOrDefault("DB_PASSWORD", "postgres"),
 			Name:     getEnvOrDefault("DB_NAME", "samotsvety"),
 			SSLMode:  getEnvOrDefault("DB_SSLMODE", "disable"),
+		},
+		Storage: StorageConfig{
+			Endpoint:  getEnvOrDefault("YC_S3_ENDPOINT", "https://storage.yandexcloud.net"),
+			Region:    getEnvOrDefault("YC_S3_REGION", "ru-central1"),
+			Bucket:    getEnvOrDefault("YC_S3_BUCKET", ""),
+			AccessKey: getEnvOrDefault("YC_S3_ACCESS_KEY", ""),
+			SecretKey: getEnvOrDefault("YC_S3_SECRET_KEY", ""),
+			PublicURL: getEnvOrDefault("YC_S3_PUBLIC_URL", ""),
 		},
 	}
 }

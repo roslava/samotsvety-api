@@ -109,16 +109,17 @@ func (h *PostHandler) CreatePost(c *gin.Context) {
 	now := time.Now().UTC()
 
 	post := &domain.Post{
-		Slug:        req.Slug,
-		Type:        req.Type,
-		I18n:        req.I18n,
-		CoverImage:  req.CoverImage,
-		GemSlugs:    req.GemSlugs,
-		Tags:        req.Tags,
-		PublishedAt: req.PublishedAt,
-		UpdatedAt:   now,
-		IsPublished: req.IsPublished,
-		Author:      req.Author,
+		Slug:          req.Slug,
+		Type:          req.Type,
+		I18n:          req.I18n,
+		CoverImage:    req.CoverImage,
+		ContentBlocks: req.ContentBlocks,
+		GemSlugs:      req.GemSlugs,
+		Tags:          req.Tags,
+		PublishedAt:   req.PublishedAt,
+		UpdatedAt:     now,
+		IsPublished:   req.IsPublished,
+		Author:        req.Author,
 	}
 
 	if err := h.repo.Create(c.Request.Context(), post); err != nil {
@@ -145,15 +146,16 @@ type ListPostsRequest struct {
 
 // CreatePostRequest — DTO для создания статьи
 type CreatePostRequest struct {
-	Slug        string          `json:"slug" validate:"required"`
-	Type        domain.PostType `json:"type" validate:"required"`
-	I18n        domain.PostI18n `json:"i18n" validate:"required"`
-	CoverImage  string          `json:"cover_image"`
-	GemSlugs    []string        `json:"gem_slugs"`
-	Tags        []string        `json:"tags"`
-	PublishedAt *time.Time      `json:"published_at"`
-	IsPublished bool            `json:"is_published"`
-	Author      string          `json:"author"`
+	Slug          string                `json:"slug" validate:"required"`
+	Type          domain.PostType       `json:"type" validate:"required"`
+	I18n          domain.PostI18n       `json:"i18n" validate:"required"`
+	CoverImage    string                `json:"cover_image"`
+	ContentBlocks []domain.ContentBlock `json:"content_blocks"`
+	GemSlugs      []string              `json:"gem_slugs"`
+	Tags          []string              `json:"tags"`
+	PublishedAt   *time.Time            `json:"published_at"`
+	IsPublished   bool                  `json:"is_published"`
+	Author        string                `json:"author"`
 }
 
 // UpdatePost godoc
@@ -195,6 +197,9 @@ func (h *PostHandler) UpdatePost(c *gin.Context) {
 	}
 	if req.CoverImage != nil {
 		post.CoverImage = *req.CoverImage
+	}
+	if req.ContentBlocks != nil {
+		post.ContentBlocks = *req.ContentBlocks
 	}
 	if req.GemSlugs != nil {
 		post.GemSlugs = *req.GemSlugs
@@ -249,15 +254,16 @@ func (h *PostHandler) DeletePost(c *gin.Context) {
 
 // UpdatePostRequest — DTO для обновления статьи (все поля опциональны)
 type UpdatePostRequest struct {
-	Slug        *string          `json:"slug"`
-	Type        *domain.PostType `json:"type"`
-	I18n        *domain.PostI18n `json:"i18n"`
-	CoverImage  *string          `json:"cover_image"`
-	GemSlugs    *[]string        `json:"gem_slugs"`
-	Tags        *[]string        `json:"tags"`
-	PublishedAt *time.Time       `json:"published_at"`
-	IsPublished *bool            `json:"is_published"`
-	Author      *string          `json:"author"`
+	Slug          *string                `json:"slug"`
+	Type          *domain.PostType       `json:"type"`
+	I18n          *domain.PostI18n       `json:"i18n"`
+	CoverImage    *string                `json:"cover_image"`
+	ContentBlocks *[]domain.ContentBlock `json:"content_blocks"`
+	GemSlugs      *[]string              `json:"gem_slugs"`
+	Tags          *[]string              `json:"tags"`
+	PublishedAt   *time.Time             `json:"published_at"`
+	IsPublished   *bool                  `json:"is_published"`
+	Author        *string                `json:"author"`
 }
 
 // SearchPosts godoc
