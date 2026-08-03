@@ -66,38 +66,49 @@ type PostLangData struct {
 }
 
 // ContentBlock — один элемент композиции статьи. Порядок в массиве = порядок на странице.
-// Медиа (URL картинок, layout) языконезависимы — одно и то же фото что в RU, что в EN версии.
-// Языкозависим только текст: он лежит в I18n.
+// Медиа (URL картинок, layout) по умолчанию общие для RU и EN — одно и то же фото что
+// там, что там. Но если иллюстрация — схема/диаграмма со встроенным в саму картинку
+// текстом (подписи на осях, стрелки с русскими словами и т.п.), общей картинки мало —
+// тогда в BlockLangData.ImageURL/ImageURLs можно указать версию для конкретного языка,
+// и она перекроет общую ImageURL/ImageURLs для этого языка. Если override не задан —
+// используется общая картинка, как и раньше.
 type ContentBlock struct {
 	ID   string    `json:"id" validate:"required"`
 	Type BlockType `json:"type" validate:"required,oneof=heading paragraph image image_pair quote"`
 
-	// Для BlockTypeImage
+	// Для BlockTypeImage — общая картинка (используется, если для языка нет override)
 	Layout   ImageLayout `json:"layout,omitempty" validate:"omitempty,oneof=full inset"`
 	ImageURL string      `json:"image_url,omitempty"`
 
-	// Для BlockTypeImagePair — ровно 2 URL
+	// Для BlockTypeImagePair — общие 2 URL (используются, если для языка нет override)
 	ImageURLs []string `json:"image_urls,omitempty" validate:"omitempty,max=2"`
 
 	I18n BlockI18n `json:"i18n"`
 }
 
-// BlockI18n — языкозависимый текст внутри блока
+// BlockI18n — языкозависимый текст (и, при необходимости, языкозависимая картинка)
 type BlockI18n struct {
 	Ru BlockLangData `json:"ru"`
 	En BlockLangData `json:"en"`
 }
 
-// BlockLangData — текстовые поля блока на одном языке.
+// BlockLangData — языкозависимые поля блока.
 // Какие поля используются — зависит от Type блока:
 //
 //	heading/paragraph/quote — Text
 //	quote                   — плюс Attribution
-//	image                   — Caption
-//	image_pair              — Captions[0], Captions[1] (по числу ImageURLs)
+//	image                   — Caption, и опционально ImageURL (override общей картинки для схем с текстом на изображении)
+//	image_pair              — Captions[0], Captions[1], и опционально ImageURLs (override пары для схем)
 type BlockLangData struct {
 	Text        string   `json:"text,omitempty"`
 	Attribution string   `json:"attribution,omitempty"`
 	Caption     string   `json:"caption,omitempty"`
 	Captions    []string `json:"captions,omitempty"`
+
+	// Override общей картинки блока для этого языка — только если она реально отличается
+	// (например, схема с подписями на русском vs на английском). В обычном случае
+	// (фото камня — одно и то же для всех языков) эти поля пустые, и рендер берёт
+	// ContentBlock.ImageURL / ImageURLs.
+	ImageURL  string   `json:"image_url,omitempty"`
+	ImageURLs []string `json:"image_urls,omitempty" validate:"omitempty,max=2"`
 }
