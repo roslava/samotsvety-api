@@ -65,6 +65,14 @@ type PostLangData struct {
 	Content string `json:"content,omitempty"` // Markdown или HTML — устаревшее поле, для старых статей до перехода на блоки
 }
 
+// HeadingLevel — уровень заголовка: обычный раздел статьи или подзаголовок внутри раздела
+type HeadingLevel string
+
+const (
+	HeadingLevelSection HeadingLevel = "section"    // крупный заголовок раздела (H2)
+	HeadingLevelSub     HeadingLevel = "subheading" // подзаголовок внутри раздела (H3), помельче
+)
+
 // ContentBlock — один элемент композиции статьи. Порядок в массиве = порядок на странице.
 // Медиа (URL картинок, layout) по умолчанию общие для RU и EN — одно и то же фото что
 // там, что там. Но если иллюстрация — схема/диаграмма со встроенным в саму картинку
@@ -75,6 +83,9 @@ type PostLangData struct {
 type ContentBlock struct {
 	ID   string    `json:"id" validate:"required"`
 	Type BlockType `json:"type" validate:"required,oneof=heading paragraph image image_pair quote"`
+
+	// Для BlockTypeHeading — уровень (по умолчанию "section", если не задан)
+	Level HeadingLevel `json:"level,omitempty" validate:"omitempty,oneof=section subheading"`
 
 	// Для BlockTypeImage — общая картинка (используется, если для языка нет override)
 	Layout   ImageLayout `json:"layout,omitempty" validate:"omitempty,oneof=full inset"`
