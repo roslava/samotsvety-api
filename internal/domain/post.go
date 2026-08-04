@@ -63,6 +63,11 @@ type PostLangData struct {
 	Title   string `json:"title" validate:"required"`
 	Excerpt string `json:"excerpt,omitempty"`
 	Content string `json:"content,omitempty"` // Markdown или HTML — устаревшее поле, для старых статей до перехода на блоки
+
+	// Override общей обложки (Post.CoverImage) для этого языка — на случай, если обложка
+	// сама несёт текст (баннер с заголовком на картинке и т.п.). Если пусто — используется
+	// общая Post.CoverImage, как и раньше.
+	CoverImage string `json:"cover_image,omitempty"`
 }
 
 // HeadingLevel — уровень заголовка: обычный раздел статьи или подзаголовок внутри раздела
