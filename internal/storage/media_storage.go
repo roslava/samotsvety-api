@@ -19,12 +19,24 @@ import (
 	"github.com/roslava/samotsvety-api/internal/config"
 )
 
-// MediaStorage — хранилище файлов для иллюстраций статей.
+// MediaStorage — хранилище файлов для иллюстраций статей и медиа минералов.
 // Реализация — Yandex Object Storage, который S3-совместим, поэтому используется
 // обычный AWS SDK с кастомным endpoint, без отдельного Yandex-специфичного клиента.
 type MediaStorage interface {
-	// Upload сохраняет файл и возвращает публичный URL, по которому он будет доступен фронтенду.
+	// Upload сохраняет файл под СГЕНЕРИРОВАННЫМ уникальным именем внутри folder
+	// и возвращает публичный URL. Используется для иллюстраций статей, где
+	// строгая структура папок/имён не требуется.
 	Upload(ctx context.Context, folder string, filename string, contentType string, data io.Reader, size int64) (string, error)
+
+	// UploadAt сохраняет файл под ТОЧНО заданным ключом (перезаписывая существующий
+	// объект, если он там уже есть) и возвращает публичный URL. Используется там, где
+	// имя и путь файла — часть контракта (hero.webp, thumbnail.webp, gallery/rubyNN.webp).
+	UploadAt(ctx context.Context, key string, contentType string, data io.Reader, size int64) (string, error)
+
+	// ListKeys возвращает ключи объектов бакета с данным префиксом.
+	// Используется, например, чтобы определить следующий порядковый номер
+	// изображения в галерее минерала (ruby01.webp, ruby02.webp, ...).
+	ListKeys(ctx context.Context, prefix string) ([]string, error)
 }
 
 type yandexS3Storage struct {
@@ -69,7 +81,15 @@ func NewYandexS3Storage(ctx context.Context, cfg config.StorageConfig) (MediaSto
 
 func (s *yandexS3Storage) Upload(ctx context.Context, folder, filename, contentType string, data io.Reader, size int64) (string, error) {
 	key := path.Join(folder, uniqueFilename(filename))
+	return s.putObject(ctx, key, contentType, data, size)
+}
 
+func (s *yandexS3Storage) UploadAt(ctx context.Context, key, contentType string, data io.Reader, size int64) (string, error) {
+	key = strings.TrimLeft(key, "/")
+	return s.putObject(ctx, key, contentType, data, size)
+}
+
+func (s *yandexS3Storage) putObject(ctx context.Context, key, contentType string, data io.Reader, size int64) (string, error) {
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(s.bucket),
 		Key:           aws.String(key),
@@ -83,6 +103,29 @@ func (s *yandexS3Storage) Upload(ctx context.Context, folder, filename, contentT
 	}
 
 	return s.publicURL + "/" + key, nil
+}
+
+func (s *yandexS3Storage) ListKeys(ctx context.Context, prefix string) ([]string, error) {
+	var keys []string
+
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.bucket),
+		Prefix: aws.String(prefix),
+	})
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("storage: list objects failed: %w", err)
+		}
+		for _, obj := range page.Contents {
+			if obj.Key != nil {
+				keys = append(keys, *obj.Key)
+			}
+		}
+	}
+
+	return keys, nil
 }
 
 // uniqueFilename добавляет к оригинальному имени файла дату и случайный суффикс,
