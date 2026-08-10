@@ -61,15 +61,88 @@ const (
 )
 
 // Scientific — по-настоящему языконезависимые данные: формула, числа, категория.
-// Всё, что раньше тут лежало текстом на русском (группа, система, блеск и т.д.),
-// переехало в LangData ниже — там ему самое место.
+// CrystalSystem/Streak/Fracture/Cleavage* тоже здесь: это не свободный текст на
+// одном языке, а закрытые перечисления с фиксированными кодами — дублировать их
+// в LangData.Ru/En нет смысла (один и тот же факт пришлось бы поддерживать в
+// двух местах и рисковать рассинхроном). Перевод кода в подпись делается
+// словарём на фронте/в админке, как уже сделано для Rarity и BaseColor.
 type Scientific struct {
 	ChemicalFormula string          `json:"chemical_formula,omitempty"`
 	Hardness        Hardness        `json:"hardness" validate:"required"`
 	SpecificGravity SpecificGravity `json:"specific_gravity" validate:"required"`
 	Rarity          Rarity          `json:"rarity" validate:"required,oneof=common uncommon rare very_rare"`
 	BaseColor       BaseColor       `json:"base_color,omitempty" validate:"omitempty,oneof=red black bi_color blue brown green yellow grey purple white pink multicolor orange"`
+	CrystalSystem   CrystalSystem   `json:"crystal_system,omitempty" validate:"omitempty,oneof=monoclinic orthorhombic hexagonal isometric triclinic tetragonal amorphous"`
+	Streak          Streak          `json:"streak,omitempty" validate:"omitempty,oneof=black white_or_colourless grey green blue brown pink_to_red yellow_to_orange"`
+	Fracture        Fracture        `json:"fracture,omitempty" validate:"omitempty,oneof=conchoidal uneven splintery hackly earthy fibrous"`
+	// CleavageDirection/CleavageType осмысленны только когда CleavageDegree != none;
+	// это проверяется на уровне админки (UI скрывает эти поля), не здесь.
+	CleavageDegree    CleavageDegree `json:"cleavage_degree,omitempty" validate:"omitempty,oneof=none very_poor poor good perfect"`
+	CleavageDirection string         `json:"cleavage_direction,omitempty" validate:"omitempty,oneof=1 2 3 4"`
+	CleavageType      CleavageType   `json:"cleavage_type,omitempty" validate:"omitempty,oneof=basal prismatic pinacoidal rhombohedral cubic octahedral dodecahedral"`
 }
+
+type CrystalSystem string
+
+const (
+	CrystalSystemMonoclinic   CrystalSystem = "monoclinic"
+	CrystalSystemOrthorhombic CrystalSystem = "orthorhombic"
+	CrystalSystemHexagonal    CrystalSystem = "hexagonal"
+	CrystalSystemIsometric    CrystalSystem = "isometric"
+	CrystalSystemTriclinic    CrystalSystem = "triclinic"
+	CrystalSystemTetragonal   CrystalSystem = "tetragonal"
+	CrystalSystemAmorphous    CrystalSystem = "amorphous"
+)
+
+type Streak string
+
+const (
+	StreakBlack             Streak = "black"
+	StreakWhiteOrColourless Streak = "white_or_colourless"
+	StreakGrey              Streak = "grey"
+	StreakGreen             Streak = "green"
+	StreakBlue              Streak = "blue"
+	StreakBrown             Streak = "brown"
+	StreakPinkToRed         Streak = "pink_to_red"
+	StreakYellowToOrange    Streak = "yellow_to_orange"
+)
+
+type Fracture string
+
+const (
+	FractureConchoidal Fracture = "conchoidal"
+	FractureUneven     Fracture = "uneven"
+	FractureSplintery  Fracture = "splintery"
+	FractureHackly     Fracture = "hackly"
+	FractureEarthy     Fracture = "earthy"
+	FractureFibrous    Fracture = "fibrous"
+)
+
+// CleavageDegree — степень спайности. "none" и "отсутствует спайность" — это
+// одно и то же значение, поэтому в перечислении оно ровно одно.
+type CleavageDegree string
+
+const (
+	CleavageDegreeNone     CleavageDegree = "none"
+	CleavageDegreeVeryPoor CleavageDegree = "very_poor"
+	CleavageDegreePoor     CleavageDegree = "poor"
+	CleavageDegreeGood     CleavageDegree = "good"
+	CleavageDegreePerfect  CleavageDegree = "perfect"
+)
+
+// CleavageType — геометрический тип спайности. Необязательное поле: не для
+// каждого минерала он документирован/имеет смысл заполнять.
+type CleavageType string
+
+const (
+	CleavageTypeBasal        CleavageType = "basal"
+	CleavageTypePrismatic    CleavageType = "prismatic"
+	CleavageTypePinacoidal   CleavageType = "pinacoidal"
+	CleavageTypeRhombohedral CleavageType = "rhombohedral"
+	CleavageTypeCubic        CleavageType = "cubic"
+	CleavageTypeOctahedral   CleavageType = "octahedral"
+	CleavageTypeDodecahedral CleavageType = "dodecahedral"
+)
 
 type Hardness struct {
 	Min float64 `json:"min" validate:"required,gte=1,lte=10"`
@@ -97,9 +170,11 @@ type I18n struct {
 }
 
 // LangData — весь переводимый контент минерала на одном языке.
-// Раньше часть этих полей (Mineral Group, Crystal System, Streak и т.д.) жила
-// в Scientific — из-за этого при переключении на EN они не могли не остаться
-// русскими: для них физически не было английской версии. Теперь всё здесь.
+// CrystalSystem/Streak/Fracture/Cleavage* сюда больше не входят: это закрытые
+// перечисления с языконезависимыми кодами, они переехали в Scientific (см.
+// комментарий там). Остальные научные поля (MineralGroup, Luster, Transparency
+// и т.д.) пока остаются свободным текстом на каждом языке — это описания, а
+// не enum, справочника значений для них нет.
 type LangData struct {
 	Name             string    `json:"name" validate:"required"`
 	Synonyms         []string  `json:"synonyms,omitempty"`
@@ -109,13 +184,9 @@ type LangData struct {
 	Esoteric         *Esoteric `json:"esoteric,omitempty"`
 
 	MineralGroup       string   `json:"mineral_group,omitempty"`
-	CrystalSystem      string   `json:"crystal_system,omitempty"`
 	CrystalHabit       string   `json:"crystal_habit,omitempty"`
-	Streak             string   `json:"streak,omitempty"`
 	Luster             string   `json:"luster,omitempty"`
 	Transparency       string   `json:"transparency,omitempty"`
-	Cleavage           string   `json:"cleavage,omitempty"`
-	Fracture           string   `json:"fracture,omitempty"`
 	Tenacity           string   `json:"tenacity,omitempty"`
 	HardnessNote       string   `json:"hardness_note,omitempty"`
 	IMAStatus          string   `json:"ima_status,omitempty"`
