@@ -10,7 +10,13 @@
       "min": 3.6,
       "max": 4.05
     },
-    "rarity": "common"
+    "rarity": "common",
+    "crystal_system": "monoclinic",
+    "streak": "green",
+    "fracture": "conchoidal",
+    "cleavage_degree": "perfect",
+    "cleavage_direction": "1",
+    "cleavage_type": "pinacoidal"
   },
   "i18n": {
     "ru": {
@@ -20,13 +26,9 @@
       "color_description": "Ярко-зелёный с характерным концентрическим рисунком",
       "lore": "Один из самых известных уральских самоцветов. Добывался в огромных количествах на Меднорудянском и Гумешевском месторождениях. Использовался для создания ваз, столешниц и предметов декора в эпоху Демидовых.",
       "mineral_group": "карбонаты",
-      "crystal_system": "моноклинная",
       "crystal_habit": "почковидный, волокнистый, радиально-лучистый",
-      "streak": "светло-зелёная",
       "luster": "стеклянный, шелковистый",
       "transparency": "непрозрачный",
-      "cleavage": "совершенная",
-      "fracture": "раковистый",
       "identification_tips": "Характерный ярко-зелёный цвет с концентрическими полосами",
       "safety_notes": "Содержит медь. Не рекомендуется длительный контакт с кожей в сыром виде и использование в воде для питья.",
       "esoteric": {
@@ -42,13 +44,9 @@
       "color_description": "Vibrant green with concentric banding",
       "lore": "One of the most famous Ural gemstones. Mined in large quantities at Mednorudyanskoye and Gumyoshki deposits. Widely used for vases, tabletops and decorative items during the Demidov era.",
       "mineral_group": "carbonates",
-      "crystal_system": "monoclinic",
       "crystal_habit": "botryoidal, fibrous, radial-fanning",
-      "streak": "light green",
       "luster": "vitreous, silky",
       "transparency": "opaque",
-      "cleavage": "perfect",
-      "fracture": "conchoidal",
       "identification_tips": "Distinctive bright green colour with concentric banding",
       "safety_notes": "Contains copper. Prolonged skin contact with raw specimens and use in drinking water are not recommended.",
       "esoteric": {
