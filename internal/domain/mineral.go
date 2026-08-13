@@ -61,26 +61,216 @@ const (
 )
 
 // Scientific — по-настоящему языконезависимые данные: формула, числа, категория.
-// CrystalSystem/Streak/Fracture/Cleavage* тоже здесь: это не свободный текст на
-// одном языке, а закрытые перечисления с фиксированными кодами — дублировать их
-// в LangData.Ru/En нет смысла (один и тот же факт пришлось бы поддерживать в
-// двух местах и рисковать рассинхроном). Перевод кода в подпись делается
-// словарём на фронте/в админке, как уже сделано для Rarity и BaseColor.
+// CrystalSystem/Streak/Fracture/Cleavage* и всё, что добавлено этой ревизией
+// (Transparency/Luster/Tenacity, IMAStatus/RockType, Phenomena, MineralClass/
+// SilicateSubclass/MineralFamily, CrystalHabit) — тоже здесь: это не свободный
+// текст на одном языке, а закрытые перечисления с фиксированными кодами —
+// дублировать их в LangData.Ru/En нет смысла (один и тот же факт пришлось бы
+// поддерживать в двух местах и рисковать рассинхроном). Перевод кода в
+// подпись делается словарём на фронте/в админке, как уже сделано для Rarity.
+//
+// HardnessNote и Composition — тоже здесь, но это свободный текст, не enum:
+// Composition для минерала обычно дублировал бы ChemicalFormula, но для
+// породы это содержательное петрографическое описание («преимущественно
+// кварц и полевые шпаты с примесью биотита»), не сводимое к перечислению.
 type Scientific struct {
 	ChemicalFormula string          `json:"chemical_formula,omitempty"`
 	Hardness        Hardness        `json:"hardness" validate:"required"`
+	HardnessNote    string          `json:"hardness_note,omitempty"`
 	SpecificGravity SpecificGravity `json:"specific_gravity" validate:"required"`
 	Rarity          Rarity          `json:"rarity" validate:"required,oneof=common uncommon rare very_rare"`
 	BaseColor       BaseColor       `json:"base_color,omitempty" validate:"omitempty,oneof=red black bi_color blue brown green yellow grey purple white pink multicolor orange"`
-	CrystalSystem   CrystalSystem   `json:"crystal_system,omitempty" validate:"omitempty,oneof=monoclinic orthorhombic hexagonal isometric triclinic tetragonal amorphous"`
-	Streak          Streak          `json:"streak,omitempty" validate:"omitempty,oneof=black white_or_colourless grey green blue brown pink_to_red yellow_to_orange"`
-	Fracture        Fracture        `json:"fracture,omitempty" validate:"omitempty,oneof=conchoidal uneven splintery hackly earthy fibrous"`
+
+	MineralClass MineralClass `json:"mineral_class,omitempty" validate:"omitempty,oneof=native_elements sulfides_sulfosalts halides oxides_hydroxides carbonates_nitrates borates sulfates_chromates_molybdates_tungstates phosphates_arsenates_vanadates silicates organic"`
+	// SilicateSubclass осмыслен только когда MineralClass == silicates; это
+	// проверяется на уровне админки (UI скрывает поле), не здесь.
+	SilicateSubclass SilicateSubclass `json:"silicate_subclass,omitempty" validate:"omitempty,oneof=nesosilicates sorosilicates cyclosilicates inosilicates phyllosilicates tectosilicates"`
+	// MineralFamily — независимая от MineralClass ось: коллекционная
+	// группа/семейство (то, чем пользуется коллекционер при поиске),
+	// а не научный химический класс.
+	MineralFamily MineralFamily `json:"mineral_family,omitempty" validate:"omitempty,oneof=garnet_group feldspar_group quartz_group tourmaline_group mica_group pyroxene_group amphibole_group zeolite_group beryl_group spinel_group corundum_group calcite_group"`
+	Composition   string        `json:"composition,omitempty"`
+
+	CrystalSystem CrystalSystem `json:"crystal_system,omitempty" validate:"omitempty,oneof=monoclinic orthorhombic hexagonal isometric triclinic tetragonal amorphous"`
+	// CrystalHabit почти всегда комбинация нескольких форм сразу
+	// («призматический, волокнистый, радиально-лучистый»), поэтому массив.
+	CrystalHabit []CrystalHabit `json:"crystal_habit,omitempty" validate:"omitempty,dive,oneof=prismatic acicular tabular platy foliated fibrous granular massive druzy radiating globular reniform botryoidal columnar cubic rhombohedral dendritic earthy"`
+
+	Streak       Streak       `json:"streak,omitempty" validate:"omitempty,oneof=black white_or_colourless grey green blue brown pink_to_red yellow_to_orange"`
+	Transparency Transparency `json:"transparency,omitempty" validate:"omitempty,oneof=transparent translucent opaque"`
+	// Luster/Tenacity — атомарные термины (Dana/Klein), без составных значений:
+	// образец кодируется набором (золото: [malleable, ductile]), а не отдельным
+	// "составным" кодом вроде "ковкий и тягучий".
+	Luster   []Luster   `json:"luster,omitempty" validate:"omitempty,dive,oneof=vitreous adamantine metallic submetallic pearly silky resinous greasy waxy dull earthy"`
+	Tenacity []Tenacity `json:"tenacity,omitempty" validate:"omitempty,dive,oneof=brittle malleable ductile sectile flexible elastic"`
+	Fracture Fracture   `json:"fracture,omitempty" validate:"omitempty,oneof=conchoidal uneven splintery hackly earthy fibrous"`
 	// CleavageDirection/CleavageType осмысленны только когда CleavageDegree != none;
 	// это проверяется на уровне админки (UI скрывает эти поля), не здесь.
 	CleavageDegree    CleavageDegree `json:"cleavage_degree,omitempty" validate:"omitempty,oneof=none very_poor poor good perfect"`
 	CleavageDirection string         `json:"cleavage_direction,omitempty" validate:"omitempty,oneof=1 2 3 4"`
 	CleavageType      CleavageType   `json:"cleavage_type,omitempty" validate:"omitempty,oneof=basal prismatic pinacoidal rhombohedral cubic octahedral dodecahedral"`
+
+	// Иридесценция уже включает то, что иногда называют "переливчатостью" —
+	// не дублируется отдельным термином. Лабрадоресценция — частный случай
+	// шиллер-эффекта у лабрадорита, отдельно как "шиллер-эффект" не хранится.
+	Phenomena []Phenomenon `json:"phenomena,omitempty" validate:"omitempty,dive,oneof=asterism iridescence aventurescence adularescence labradorescence chatoyancy opalescence color_change"`
+
+	// Именно статус минерального вида по IMA — торговое название (trade name)
+	// сюда не входит, это отдельное измерение, не научный статус.
+	IMAStatus IMAStatus `json:"ima_status,omitempty" validate:"omitempty,oneof=approved grandfathered questionable discredited"`
+	// RockType осмыслен в основном для Type == rock, но не форсируется здесь —
+	// в БД лучше пусто, чем искусственное значение "не определено".
+	RockType RockType `json:"rock_type,omitempty" validate:"omitempty,oneof=igneous sedimentary metamorphic"`
 }
+
+// MineralClass — химический класс по Дана/Штрунцу. Научная ось классификации,
+// отдельная от MineralFamily (коллекционной группы) ниже.
+type MineralClass string
+
+const (
+	MineralClassNativeElements                        MineralClass = "native_elements"
+	MineralClassSulfidesSulfosalts                    MineralClass = "sulfides_sulfosalts"
+	MineralClassHalides                               MineralClass = "halides"
+	MineralClassOxidesHydroxides                      MineralClass = "oxides_hydroxides"
+	MineralClassCarbonatesNitrates                    MineralClass = "carbonates_nitrates"
+	MineralClassBorates                               MineralClass = "borates"
+	MineralClassSulfatesChromatesMolybdatesTungstates MineralClass = "sulfates_chromates_molybdates_tungstates"
+	MineralClassPhosphatesArsenatesVanadates          MineralClass = "phosphates_arsenates_vanadates"
+	MineralClassSilicates                             MineralClass = "silicates"
+	MineralClassOrganic                               MineralClass = "organic"
+)
+
+// SilicateSubclass — осмыслен только при MineralClass == MineralClassSilicates.
+type SilicateSubclass string
+
+const (
+	SilicateSubclassNesosilicates   SilicateSubclass = "nesosilicates"
+	SilicateSubclassSorosilicates   SilicateSubclass = "sorosilicates"
+	SilicateSubclassCyclosilicates  SilicateSubclass = "cyclosilicates"
+	SilicateSubclassInosilicates    SilicateSubclass = "inosilicates"
+	SilicateSubclassPhyllosilicates SilicateSubclass = "phyllosilicates"
+	SilicateSubclassTectosilicates  SilicateSubclass = "tectosilicates"
+)
+
+// MineralFamily — коллекционная группа/семейство: то, чем реально пользуется
+// коллекционер при поиске ("покажи все гранаты"). Стартовый список, расширяемый.
+type MineralFamily string
+
+const (
+	MineralFamilyGarnetGroup     MineralFamily = "garnet_group"
+	MineralFamilyFeldsparGroup   MineralFamily = "feldspar_group"
+	MineralFamilyQuartzGroup     MineralFamily = "quartz_group"
+	MineralFamilyTourmalineGroup MineralFamily = "tourmaline_group"
+	MineralFamilyMicaGroup       MineralFamily = "mica_group"
+	MineralFamilyPyroxeneGroup   MineralFamily = "pyroxene_group"
+	MineralFamilyAmphiboleGroup  MineralFamily = "amphibole_group"
+	MineralFamilyZeoliteGroup    MineralFamily = "zeolite_group"
+	MineralFamilyBerylGroup      MineralFamily = "beryl_group"
+	MineralFamilySpinelGroup     MineralFamily = "spinel_group"
+	MineralFamilyCorundumGroup   MineralFamily = "corundum_group"
+	MineralFamilyCalciteGroup    MineralFamily = "calcite_group"
+)
+
+// CrystalHabit — форма кристаллов/агрегатов. Почти всегда комбинация
+// нескольких значений сразу, отсюда []CrystalHabit в Scientific. Формы
+// отдельных кристаллов и агрегатов пока в одном списке — разделение на
+// habit/aggregate habit можно ввести отдельным полем позже.
+type CrystalHabit string
+
+const (
+	CrystalHabitPrismatic    CrystalHabit = "prismatic"
+	CrystalHabitAcicular     CrystalHabit = "acicular"
+	CrystalHabitTabular      CrystalHabit = "tabular"
+	CrystalHabitPlaty        CrystalHabit = "platy"
+	CrystalHabitFoliated     CrystalHabit = "foliated"
+	CrystalHabitFibrous      CrystalHabit = "fibrous"
+	CrystalHabitGranular     CrystalHabit = "granular"
+	CrystalHabitMassive      CrystalHabit = "massive"
+	CrystalHabitDruzy        CrystalHabit = "druzy"
+	CrystalHabitRadiating    CrystalHabit = "radiating"
+	CrystalHabitGlobular     CrystalHabit = "globular"
+	CrystalHabitReniform     CrystalHabit = "reniform"
+	CrystalHabitBotryoidal   CrystalHabit = "botryoidal"
+	CrystalHabitColumnar     CrystalHabit = "columnar"
+	CrystalHabitCubic        CrystalHabit = "cubic"
+	CrystalHabitRhombohedral CrystalHabit = "rhombohedral"
+	CrystalHabitDendritic    CrystalHabit = "dendritic"
+	CrystalHabitEarthy       CrystalHabit = "earthy"
+)
+
+type Transparency string
+
+const (
+	TransparencyTransparent Transparency = "transparent"
+	TransparencyTranslucent Transparency = "translucent"
+	TransparencyOpaque      Transparency = "opaque"
+)
+
+// Luster — атомарные термины (Dana/Klein). Комбинация задаётся набором
+// значений в Scientific.Luster, а не отдельным "составным" кодом.
+type Luster string
+
+const (
+	LusterVitreous    Luster = "vitreous"
+	LusterAdamantine  Luster = "adamantine"
+	LusterMetallic    Luster = "metallic"
+	LusterSubmetallic Luster = "submetallic"
+	LusterPearly      Luster = "pearly"
+	LusterSilky       Luster = "silky"
+	LusterResinous    Luster = "resinous"
+	LusterGreasy      Luster = "greasy"
+	LusterWaxy        Luster = "waxy"
+	LusterDull        Luster = "dull"
+	LusterEarthy      Luster = "earthy"
+)
+
+// Tenacity — тоже атомарные термины: золото = [malleable, ductile],
+// слюда = [flexible, elastic], без составного значения на каждую комбинацию.
+type Tenacity string
+
+const (
+	TenacityBrittle   Tenacity = "brittle"
+	TenacityMalleable Tenacity = "malleable"
+	TenacityDuctile   Tenacity = "ductile"
+	TenacitySectile   Tenacity = "sectile"
+	TenacityFlexible  Tenacity = "flexible"
+	TenacityElastic   Tenacity = "elastic"
+)
+
+// IMAStatus — именно статус минерального вида по IMA. Trade name сюда не
+// входит: это другое измерение (коммерческое обозначение, не научный статус).
+type IMAStatus string
+
+const (
+	IMAStatusApproved      IMAStatus = "approved"
+	IMAStatusGrandfathered IMAStatus = "grandfathered"
+	IMAStatusQuestionable  IMAStatus = "questionable"
+	IMAStatusDiscredited   IMAStatus = "discredited"
+)
+
+type RockType string
+
+const (
+	RockTypeIgneous     RockType = "igneous"
+	RockTypeSedimentary RockType = "sedimentary"
+	RockTypeMetamorphic RockType = "metamorphic"
+)
+
+// Phenomenon — иридесценция включает то, что иногда называют
+// "переливчатостью" (один код). Лабрадоресценция — частный случай
+// шиллер-эффекта у лабрадорита, отдельно не хранится.
+type Phenomenon string
+
+const (
+	PhenomenonAsterism        Phenomenon = "asterism"
+	PhenomenonIridescence     Phenomenon = "iridescence"
+	PhenomenonAventurescence  Phenomenon = "aventurescence"
+	PhenomenonAdularescence   Phenomenon = "adularescence"
+	PhenomenonLabradorescence Phenomenon = "labradorescence"
+	PhenomenonChatoyancy      Phenomenon = "chatoyancy"
+	PhenomenonOpalescence     Phenomenon = "opalescence"
+	PhenomenonColorChange     Phenomenon = "color_change"
+)
 
 type CrystalSystem string
 
@@ -169,12 +359,12 @@ type I18n struct {
 	En LangData `json:"en"`
 }
 
-// LangData — весь переводимый контент минерала на одном языке.
-// CrystalSystem/Streak/Fracture/Cleavage* сюда больше не входят: это закрытые
-// перечисления с языконезависимыми кодами, они переехали в Scientific (см.
-// комментарий там). Остальные научные поля (MineralGroup, Luster, Transparency
-// и т.д.) пока остаются свободным текстом на каждом языке — это описания, а
-// не enum, справочника значений для них нет.
+// LangData — весь переводимый контент минерала на одном языке. Все закрытые
+// перечисления (MineralClass/SilicateSubclass/MineralFamily, CrystalHabit,
+// Streak/Transparency/Luster/Tenacity/Fracture/Cleavage*, IMAStatus,
+// RockType, Phenomena) переехали в Scientific — это языконезависимые коды,
+// см. комментарий там. HardnessNote и Composition тоже там — свободный
+// текст, но одно значение на минерал, не на языковую вкладку.
 type LangData struct {
 	Name             string    `json:"name" validate:"required"`
 	Synonyms         []string  `json:"synonyms,omitempty"`
@@ -183,18 +373,8 @@ type LangData struct {
 	Lore             string    `json:"lore" validate:"required"`
 	Esoteric         *Esoteric `json:"esoteric,omitempty"`
 
-	MineralGroup       string   `json:"mineral_group,omitempty"`
-	CrystalHabit       string   `json:"crystal_habit,omitempty"`
-	Luster             string   `json:"luster,omitempty"`
-	Transparency       string   `json:"transparency,omitempty"`
-	Tenacity           string   `json:"tenacity,omitempty"`
-	HardnessNote       string   `json:"hardness_note,omitempty"`
-	IMAStatus          string   `json:"ima_status,omitempty"`
-	IdentificationTips string   `json:"identification_tips,omitempty"`
-	Composition        string   `json:"composition,omitempty"`
-	RockType           string   `json:"rock_type,omitempty"`
-	Phenomena          []string `json:"phenomena,omitempty"`
-	SafetyNotes        string   `json:"safety_notes,omitempty"`
+	IdentificationTips string `json:"identification_tips,omitempty"`
+	SafetyNotes        string `json:"safety_notes,omitempty"`
 }
 
 type Esoteric struct {

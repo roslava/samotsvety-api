@@ -96,11 +96,10 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 	}
 
 	if filters.MineralGroup != "" {
-		// mineral_group теперь языкозависимое поле внутри i18n — ищем в обеих версиях,
-		// чтобы фильтр работал независимо от того, на каком языке ввёл админ.
-		conditions = append(conditions, fmt.Sprintf(
-			"(i18n->'ru'->>'mineral_group' ILIKE $%d OR i18n->'en'->>'mineral_group' ILIKE $%d)", argIdx, argIdx))
-		args = append(args, "%"+filters.MineralGroup+"%")
+		// mineral_group переехал в scientific.mineral_family — языконезависимый
+		// enum (коллекционная группа), точное равенство, без ILIKE по двум языкам.
+		conditions = append(conditions, fmt.Sprintf("scientific->>'mineral_family' = $%d", argIdx))
+		args = append(args, filters.MineralGroup)
 		argIdx++
 	}
 

@@ -168,9 +168,11 @@ func (r *MemoryMineralRepository) GetFilters(ctx context.Context, lang string) (
 			}
 		}
 
-		// Группа минерала переехала в i18n (MineralGroup больше не в Scientific)
-		if mineral.I18n.Ru.MineralGroup != "" {
-			groupMap[mineral.I18n.Ru.MineralGroup] = true
+		// Группа минерала переехала в scientific.mineral_family — это
+		// языконезависимый enum (коллекционная группа), а не текст в i18n,
+		// с которым можно было разойтись между ru/en.
+		if mineral.Scientific.MineralFamily != "" {
+			groupMap[string(mineral.Scientific.MineralFamily)] = true
 		}
 
 		// Страна переехала в CountryRu/CountryEn (были одноязычным Country)

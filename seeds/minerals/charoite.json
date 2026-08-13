@@ -11,8 +11,13 @@
       "max": 2.78
     },
     "rarity": "rare",
+    "mineral_class": "silicates",
+    "silicate_subclass": "inosilicates",
     "crystal_system": "monoclinic",
+    "crystal_habit": ["fibrous", "radiating", "massive"],
     "streak": "white_or_colourless",
+    "transparency": "translucent",
+    "luster": ["vitreous", "pearly"],
     "fracture": "uneven",
     "cleavage_degree": "perfect",
     "cleavage_direction": "1"
@@ -24,10 +29,6 @@
       "color": ["сиреневый", "фиолетовый", "лавандовый"],
       "color_description": "Уникальный сиренево-фиолетовый цвет с характерным волокнистым рисунком",
       "lore": "Чароит — один из самых молодых открытых самоцветов. Найден в 1948 году на реке Чара в Якутии. Является эндемиком России и одним из символов отечественной минералогии.",
-      "mineral_group": "силикаты",
-      "crystal_habit": "волокнистый, радиально-лучистый, плотный",
-      "luster": "стеклянный, перламутровый",
-      "transparency": "полупрозрачный до непрозрачного",
       "identification_tips": "Характерный сиренево-фиолетовый цвет с волокнистой структурой",
       "safety_notes": "",
       "esoteric": {
@@ -42,10 +43,6 @@
       "color": ["lilac", "violet", "lavender"],
       "color_description": "Unique lilac-violet colour with characteristic fibrous pattern",
       "lore": "Charoite is one of the youngest discovered gemstones. Found in 1948 on the Chara River in Yakutia. It is endemic to Russia and one of the symbols of Russian mineralogy.",
-      "mineral_group": "silicates",
-      "crystal_habit": "fibrous, radial-fanning, massive",
-      "luster": "vitreous, pearly",
-      "transparency": "translucent to opaque",
       "identification_tips": "Distinctive lilac-violet colour with a fibrous structure",
       "safety_notes": "",
       "esoteric": {

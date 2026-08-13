@@ -11,8 +11,13 @@
       "max": 3.9
     },
     "rarity": "rare",
+    "mineral_class": "silicates",
+    "silicate_subclass": "nesosilicates",
+    "mineral_family": "garnet_group",
     "crystal_system": "isometric",
     "streak": "white_or_colourless",
+    "transparency": "transparent",
+    "luster": ["adamantine"],
     "fracture": "conchoidal",
     "cleavage_degree": "none"
   },
@@ -23,10 +28,6 @@
       "color": ["зелёный", "изумрудно-зелёный", "травяно-зелёный"],
       "color_description": "Насыщенный зелёный цвет с алмазным блеском",
       "lore": "Демантоид был открыт на Урале в середине XIX века. Долгое время считался одним из самых дорогих гранатов в мире. Особенно ценятся камни с 'конскими хвостами' — включениями биссолита.",
-      "mineral_group": "гранаты",
-      "crystal_habit": "ромбододекаэдрический, тетрагонтриоктаэдрический",
-      "luster": "алмазный",
-      "transparency": "прозрачный",
       "identification_tips": "Ярко-зелёный цвет с алмазным блеском и характерными 'конскими хвостами'",
       "safety_notes": "",
       "esoteric": {
@@ -41,10 +42,6 @@
       "color": ["green", "emerald green", "grass green"],
       "color_description": "Rich green colour with diamond-like brilliance",
       "lore": "Demantoid was discovered in the Urals in the mid-19th century. For a long time it was considered one of the most expensive garnets in the world. Stones with 'horse tails' (byssolite inclusions) are especially valued.",
-      "mineral_group": "garnets",
-      "crystal_habit": "rhombic dodecahedral, trapezohedral",
-      "luster": "adamantine",
-      "transparency": "transparent",
       "identification_tips": "Bright green colour with adamantine luster and characteristic 'horsetail' inclusions",
       "safety_notes": "",
       "esoteric": {
