@@ -25,7 +25,7 @@ func NewPostgresMineralRepository(db *sqlx.DB) *PostgresMineralRepository {
 
 func (r *PostgresMineralRepository) GetBySlug(ctx context.Context, slug, lang, view string) (*domain.Mineral, error) {
 	var m mineralRow
-	query := `SELECT slug, scientific, i18n, main_image_url, thumbnail_url, localities, gallery, related_minerals, created_at, updated_at 
+	query := `SELECT slug, type, scientific, i18n, main_image_url, thumbnail_url, localities, gallery, related_minerals, created_at, updated_at
 	          FROM minerals WHERE slug = $1`
 
 	err := r.db.GetContext(ctx, &m, query, slug)
@@ -162,7 +162,7 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 	}
 
 	query := fmt.Sprintf(`
-		SELECT slug, scientific, i18n, main_image_url, thumbnail_url,
+		SELECT slug, type, scientific, i18n, main_image_url, thumbnail_url,
 		       localities, gallery, related_minerals, created_at, updated_at
 		FROM minerals
 		%s
@@ -211,7 +211,8 @@ func (r *PostgresMineralRepository) Create(ctx context.Context, mineral *domain.
 
 	query := `
 		INSERT INTO minerals (
-			slug, 
+			slug,
+			type,
 			scientific, 
 			i18n, 
 			localities, 
@@ -222,14 +223,15 @@ func (r *PostgresMineralRepository) Create(ctx context.Context, mineral *domain.
 			created_at,
 			updated_at
 		) VALUES (
-			$1, $2, $3, $4, 
-			$5, $6, $7, $8,
-			$9, $10
+			$1, $2, $3, $4, $5,
+			$6, $7, $8, $9,
+			$10, $11
 		)
 	`
 
 	_, err = r.db.ExecContext(ctx, query,
 		mineral.Slug,
+		mineral.Type,
 		scientificJSON,
 		i18nJSON,
 		localitiesJSON,
@@ -249,16 +251,17 @@ func (r *PostgresMineralRepository) Create(ctx context.Context, mineral *domain.
 }
 
 type mineralRow struct {
-	Slug            string         `db:"slug"`
-	Scientific      []byte         `db:"scientific"`
-	I18n            []byte         `db:"i18n"`
-	MainImageURL    string         `db:"main_image_url"`
-	ThumbnailURL    *string        `db:"thumbnail_url"`
-	Localities      []byte         `db:"localities"`
-	Gallery         []byte         `db:"gallery"`
-	RelatedMinerals pq.StringArray `db:"related_minerals"`
-	CreatedAt       time.Time      `db:"created_at"`
-	UpdatedAt       time.Time      `db:"updated_at"`
+	Slug            string            `db:"slug"`
+	Type            domain.EntityType `db:"type"`
+	Scientific      []byte            `db:"scientific"`
+	I18n            []byte            `db:"i18n"`
+	MainImageURL    *string           `db:"main_image_url"`
+	ThumbnailURL    *string           `db:"thumbnail_url"`
+	Localities      []byte            `db:"localities"`
+	Gallery         []byte            `db:"gallery"`
+	RelatedMinerals pq.StringArray    `db:"related_minerals"`
+	CreatedAt       time.Time         `db:"created_at"`
+	UpdatedAt       time.Time         `db:"updated_at"`
 }
 
 func (row mineralRow) toMineral() *domain.Mineral {
@@ -280,9 +283,10 @@ func (row mineralRow) toMineral() *domain.Mineral {
 
 	return &domain.Mineral{
 		Slug:            row.Slug,
+		Type:            row.Type,
 		Scientific:      scientific,
 		I18n:            i18n,
-		MainImageURL:    row.MainImageURL,
+		MainImageURL:    stringValue(row.MainImageURL),
 		ThumbnailURL:    row.ThumbnailURL,
 		Localities:      localities,
 		Gallery:         gallery,
@@ -290,6 +294,13 @@ func (row mineralRow) toMineral() *domain.Mineral {
 		CreatedAt:       row.CreatedAt,
 		UpdatedAt:       row.UpdatedAt,
 	}
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func (r *PostgresMineralRepository) applyLangFilter(mineral *domain.Mineral, lang string) {
@@ -343,7 +354,7 @@ func (r *PostgresMineralRepository) Search(ctx context.Context, query, lang, vie
 	`
 
 	querySQL := fmt.Sprintf(`
-		SELECT slug, scientific, i18n, main_image_url, thumbnail_url,
+		SELECT slug, type, scientific, i18n, main_image_url, thumbnail_url,
 		       localities, gallery, related_minerals, created_at, updated_at
 		FROM minerals
 		WHERE %s
@@ -408,12 +419,12 @@ func (r *PostgresMineralRepository) GetFilters(ctx context.Context, lang string)
 	}
 	fv.BaseColors = baseColors
 
-	// Mineral Groups — теперь в i18n; берём русскую версию для админ-фильтра
+	// Mineral family is a language-neutral V2 enum.
 	var groups []string
 	if err := r.db.SelectContext(ctx, &groups, `
-		SELECT DISTINCT i18n->'ru'->>'mineral_group'
-		FROM minerals 
-		WHERE i18n->'ru'->>'mineral_group' IS NOT NULL AND i18n->'ru'->>'mineral_group' != ''
+			SELECT DISTINCT scientific->>'mineral_family'
+			FROM minerals
+			WHERE scientific->>'mineral_family' IS NOT NULL AND scientific->>'mineral_family' != ''
 		ORDER BY 1
 	`); err != nil {
 		return nil, fmt.Errorf("failed to get mineral_groups: %w", err)
@@ -451,12 +462,13 @@ func (r *PostgresMineralRepository) GetFilters(ctx context.Context, lang string)
 	}
 	fv.Colors = colors
 
-	// Countries — раньше country, теперь country_ru
+	// V2 country identity is the neutral country_code. Localized country labels
+	// remain presentation data inside each locality.
 	var countries []string
 	if err := r.db.SelectContext(ctx, &countries, `
-		SELECT DISTINCT loc->>'country_ru'
-		FROM minerals, jsonb_array_elements(COALESCE(localities, '[]'::jsonb)) AS loc
-		WHERE loc->>'country_ru' IS NOT NULL AND loc->>'country_ru' != ''
+			SELECT DISTINCT loc->>'country_code'
+			FROM minerals, jsonb_array_elements(COALESCE(localities, '[]'::jsonb)) AS loc
+			WHERE loc->>'country_code' IS NOT NULL AND loc->>'country_code' != ''
 		ORDER BY 1
 	`); err != nil {
 		countries = []string{}
@@ -487,18 +499,20 @@ func (r *PostgresMineralRepository) Update(ctx context.Context, oldSlug string, 
 		UPDATE minerals 
 		SET 
 			slug = $1,
-			scientific = $2,
-			i18n = $3,
-			localities = $4,
-			main_image_url = $5,
-			thumbnail_url = $6,
-			gallery = $7,
-			related_minerals = $8,
+			type = $2,
+			scientific = $3,
+			i18n = $4,
+			localities = $5,
+			main_image_url = $6,
+			thumbnail_url = $7,
+			gallery = $8,
+			related_minerals = $9,
 			updated_at = NOW()
-		WHERE slug = $9`
+		WHERE slug = $10`
 
 	_, err := r.db.ExecContext(ctx, query,
 		mineral.Slug,
+		mineral.Type,
 		scientificJSON,
 		i18nJSON,
 		localitiesJSON,

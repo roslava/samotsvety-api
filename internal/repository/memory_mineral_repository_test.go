@@ -13,10 +13,11 @@ import (
 func createTestMineral(slug, nameRu, nameEn string, rarity domain.Rarity) *domain.Mineral {
 	return &domain.Mineral{
 		Slug: slug,
+		Type: domain.TypeMineral,
 		Scientific: domain.Scientific{
 			ChemicalFormula: "test formula",
-			MineralGroup:    "test group",
-			CrystalSystem:   "test system",
+			MineralFamily:   domain.MineralFamilyQuartzGroup,
+			CrystalSystem:   domain.CrystalSystemTrigonal,
 			Hardness: domain.Hardness{
 				Min: 3.0,
 				Max: 4.0,
@@ -25,9 +26,9 @@ func createTestMineral(slug, nameRu, nameEn string, rarity domain.Rarity) *domai
 				Min: 2.0,
 				Max: 3.0,
 			},
-			Streak:       "white",
-			Luster:       "vitreous",
-			Transparency: "transparent",
+			Streak:       domain.StreakWhiteOrColourless,
+			Luster:       []domain.Luster{domain.LusterVitreous},
+			Transparency: domain.TransparencyTransparent,
 			Rarity:       rarity,
 		},
 		I18n: domain.I18n{
@@ -50,9 +51,10 @@ func createTestMineral(slug, nameRu, nameEn string, rarity domain.Rarity) *domai
 		},
 		Localities: []domain.Locality{
 			{
-				Country:   "Russia",
-				IsRussian: true,
-				Famous:    true,
+				CountryCode: "RU",
+				CountryRu:   "Россия",
+				IsRussian:   true,
+				Famous:      true,
 			},
 		},
 		CreatedAt: time.Now(),
@@ -330,16 +332,16 @@ func TestGetFilters(t *testing.T) {
 	// Добавим тестовые минералы с разными свойствами
 	m1 := createTestMineral("quartz", "Кварц", "Quartz", domain.RarityCommon)
 	m1.I18n.Ru.Color = []string{"white", "purple"}
-	m1.Scientific.MineralGroup = "oxides"
+	m1.Scientific.MineralFamily = domain.MineralFamilyQuartzGroup
 
 	m2 := createTestMineral("diamond", "Алмаз", "Diamond", domain.RarityRare)
 	m2.I18n.Ru.Color = []string{"colorless", "yellow"}
-	m2.Scientific.MineralGroup = "elements"
+	m2.Scientific.MineralFamily = domain.MineralFamilyCorundumGroup
 
 	repo.AddMineral(m1)
 	repo.AddMineral(m2)
 
-	filters, err := repo.GetFilters(context.Background())
+	filters, err := repo.GetFilters(context.Background(), "ru")
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)

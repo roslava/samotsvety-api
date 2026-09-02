@@ -4,11 +4,12 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	"github.com/roslava/samotsvety-api/internal/domain"
 )
 
@@ -17,7 +18,11 @@ import (
 
 // helper to get DB for testing
 func getTestDB(t *testing.T) *sqlx.DB {
-	db, err := sqlx.Connect("postgres", "postgres://postgres:postgres@localhost:5432/samotsvety?sslmode=disable")
+	dsn := os.Getenv("SAMOTSVETY_TEST_DATABASE_URL")
+	if dsn == "" {
+		dsn = "postgres://postgres:postgres@localhost:5432/samotsvety_test?sslmode=disable"
+	}
+	db, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
 		t.Skipf("Skipping integration tests: %v (PostgreSQL not available)", err)
 	}
@@ -36,13 +41,13 @@ func cleanupTestData(t *testing.T, db *sqlx.DB) {
 func insertTestMineral(t *testing.T, db *sqlx.DB, slug, nameRu, nameEn string, rarity domain.Rarity) {
 	scientific := domain.Scientific{
 		ChemicalFormula: "test",
-		MineralGroup:    "test",
-		CrystalSystem:   "test",
+		MineralFamily:   domain.MineralFamilyQuartzGroup,
+		CrystalSystem:   domain.CrystalSystemTrigonal,
 		Hardness:        domain.Hardness{Min: 3, Max: 4},
 		SpecificGravity: domain.SpecificGravity{Min: 2, Max: 3},
-		Streak:          "white",
-		Luster:          "vitreous",
-		Transparency:    "transparent",
+		Streak:          domain.StreakWhiteOrColourless,
+		Luster:          []domain.Luster{domain.LusterVitreous},
+		Transparency:    domain.TransparencyTransparent,
 		Rarity:          rarity,
 	}
 
@@ -263,7 +268,7 @@ func TestPostgresGetFilters(t *testing.T) {
 	insertTestMineral(t, db, "quartz", "Кварц", "Quartz", domain.RarityCommon)
 	insertTestMineral(t, db, "diamond", "Алмаз", "Diamond", domain.RarityRare)
 
-	filters, err := repo.GetFilters(context.Background())
+	filters, err := repo.GetFilters(context.Background(), "ru")
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -286,13 +291,13 @@ func TestPostgresGetFilters(t *testing.T) {
 func TestPostgresRowToMineral(t *testing.T) {
 	scientific := domain.Scientific{
 		ChemicalFormula: "H2O",
-		MineralGroup:    "oxide",
-		CrystalSystem:   "cubic",
+		MineralFamily:   domain.MineralFamilyQuartzGroup,
+		CrystalSystem:   domain.CrystalSystemIsometric,
 		Hardness:        domain.Hardness{Min: 3, Max: 4},
 		SpecificGravity: domain.SpecificGravity{Min: 2, Max: 3},
-		Streak:          "white",
-		Luster:          "vitreous",
-		Transparency:    "transparent",
+		Streak:          domain.StreakWhiteOrColourless,
+		Luster:          []domain.Luster{domain.LusterVitreous},
+		Transparency:    domain.TransparencyTransparent,
 		Rarity:          domain.RarityCommon,
 	}
 
@@ -306,11 +311,11 @@ func TestPostgresRowToMineral(t *testing.T) {
 
 	ts, _ := time.Parse(time.RFC3339, "2026-01-01T12:00:00Z")
 	row := mineralRow{
-		ID:              1,
 		Slug:            "test",
-		Scientific:      string(scientificJSON),
-		I18n:            string(i18nJSON),
-		RelatedMinerals: []string{"other1", "other2"},
+		Type:            domain.TypeRock,
+		Scientific:      scientificJSON,
+		I18n:            i18nJSON,
+		RelatedMinerals: pq.StringArray{"other1", "other2"},
 		CreatedAt:       ts,
 		UpdatedAt:       ts,
 	}
@@ -319,6 +324,9 @@ func TestPostgresRowToMineral(t *testing.T) {
 
 	if mineral.Slug != "test" {
 		t.Errorf("expected slug 'test', got %s", mineral.Slug)
+	}
+	if mineral.Type != domain.TypeRock {
+		t.Errorf("expected type rock, got %s", mineral.Type)
 	}
 
 	if mineral.Scientific.ChemicalFormula != "H2O" {

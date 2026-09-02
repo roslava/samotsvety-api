@@ -278,6 +278,7 @@ const (
 	CrystalSystemMonoclinic   CrystalSystem = "monoclinic"
 	CrystalSystemOrthorhombic CrystalSystem = "orthorhombic"
 	CrystalSystemHexagonal    CrystalSystem = "hexagonal"
+	CrystalSystemTrigonal     CrystalSystem = "trigonal"
 	CrystalSystemIsometric    CrystalSystem = "isometric"
 	CrystalSystemTriclinic    CrystalSystem = "triclinic"
 	CrystalSystemTetragonal   CrystalSystem = "tetragonal"
@@ -389,12 +390,14 @@ type Esoteric struct {
 // Locality — country/region/locality раньше были одноязычными полями.
 // Теперь у каждого есть _ru/_en, как и у description.
 type Locality struct {
-	CountryRu     string `json:"country_ru"`
-	CountryEn     string `json:"country_en,omitempty"`
-	RegionRu      string `json:"region_ru,omitempty"`
-	RegionEn      string `json:"region_en,omitempty"`
-	LocalityRu    string `json:"locality_ru,omitempty"`
-	LocalityEn    string `json:"locality_en,omitempty"`
+	CountryCode string `json:"country_code,omitempty"`
+	CountryRu   string `json:"country_ru"`
+	CountryEn   string `json:"country_en,omitempty"`
+	RegionRu    string `json:"region_ru,omitempty"`
+	RegionEn    string `json:"region_en,omitempty"`
+	LocalityRu  string `json:"locality_ru,omitempty"`
+	LocalityEn  string `json:"locality_en,omitempty"`
+	// Deprecated: V1 compatibility. V2 derives this from CountryCode == "RU".
 	IsRussian     bool   `json:"is_russian"`
 	Famous        bool   `json:"famous,omitempty"`
 	DescriptionRu string `json:"description_ru,omitempty"`

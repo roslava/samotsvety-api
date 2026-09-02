@@ -11,7 +11,7 @@ Status: design specification, not yet implemented. This document does not author
 1. Scientific correctness and faithful representation take precedence over Admin or Frontend convenience.
 2. Facts that do not depend on language are stored once: numbers, ranges, formulas, enum codes, identifiers, slugs, country codes, paths/URLs, and relationships.
 3. Human-readable prose is localized. In particular, no Russian or English prose belongs in `scientific`.
-4. Applicability depends on entity `type`. Missing or inapplicable facts remain absent/null; fake fallback values are forbidden.
+4. Applicability depends on entity `type`. Missing or inapplicable facts remain absent/null; `null` alone does not distinguish the reason. Fake fallback values are forbidden.
 5. A numeric measurement and its explanation are separate data. `hardness` and `specific_gravity` are numeric ranges; prose belongs in localized scientific notes.
 6. Closed enum codes are stable API values whose labels are translated by clients.
 7. Collections distinguish “known empty” (`[]`) from unknown/not supplied (omitted or `null`). Empty strings are not semantic values.
@@ -94,32 +94,34 @@ All properties are type-aware and optional unless a later endpoint profile expli
 
 ## 6. Scientific enum reference
 
-The following are the exact **CURRENT** codes from `internal/domain/mineral.go` and are the initial **PROPOSED V2** codes. V2 implementation must not accept translated labels in their place.
+The **CURRENT V1** codes below are the exact values from `internal/domain/mineral.go`. The **PROPOSED V2** codes are the V2 contract. V2 implementation must not accept translated labels in their place.
 
-| Field | CURRENT values |
-|---|---|
-| `mineral_class` | `native_elements`, `sulfides_sulfosalts`, `halides`, `oxides_hydroxides`, `carbonates_nitrates`, `borates`, `sulfates_chromates_molybdates_tungstates`, `phosphates_arsenates_vanadates`, `silicates`, `organic` |
-| `silicate_subclass` | `nesosilicates`, `sorosilicates`, `cyclosilicates`, `inosilicates`, `phyllosilicates`, `tectosilicates` |
-| `mineral_family` | `garnet_group`, `feldspar_group`, `quartz_group`, `tourmaline_group`, `mica_group`, `pyroxene_group`, `amphibole_group`, `zeolite_group`, `beryl_group`, `spinel_group`, `corundum_group`, `calcite_group` |
-| `crystal_system` | `monoclinic`, `orthorhombic`, `hexagonal`, `isometric`, `triclinic`, `tetragonal`, `amorphous` |
-| `crystal_habit` | `prismatic`, `acicular`, `tabular`, `platy`, `foliated`, `fibrous`, `granular`, `massive`, `druzy`, `radiating`, `globular`, `reniform`, `botryoidal`, `columnar`, `cubic`, `rhombohedral`, `dendritic`, `earthy` |
-| `streak` | `black`, `white_or_colourless`, `grey`, `green`, `blue`, `brown`, `pink_to_red`, `yellow_to_orange` |
-| `transparency` | `transparent`, `translucent`, `opaque` |
-| `luster` | `vitreous`, `adamantine`, `metallic`, `submetallic`, `pearly`, `silky`, `resinous`, `greasy`, `waxy`, `dull`, `earthy` |
-| `tenacity` | `brittle`, `malleable`, `ductile`, `sectile`, `flexible`, `elastic` |
-| `fracture` | `conchoidal`, `uneven`, `splintery`, `hackly`, `earthy`, `fibrous` |
-| `cleavage_degree` | `none`, `very_poor`, `poor`, `good`, `perfect` |
-| `cleavage_direction` | `1`, `2`, `3`, `4` (JSON strings) |
-| `cleavage_type` | `basal`, `prismatic`, `pinacoidal`, `rhombohedral`, `cubic`, `octahedral`, `dodecahedral` |
-| `phenomena` | `asterism`, `iridescence`, `aventurescence`, `adularescence`, `labradorescence`, `chatoyancy`, `opalescence`, `color_change` |
-| `ima_status` | `approved`, `grandfathered`, `questionable`, `discredited` |
-| `rock_type` | `igneous`, `sedimentary`, `metamorphic` |
-| `rarity` | `common`, `uncommon`, `rare`, `very_rare` |
-| `base_color` | `red`, `black`, `bi_color`, `blue`, `brown`, `green`, `yellow`, `grey`, `purple`, `white`, `pink`, `multicolor`, `orange` |
+| Field | CURRENT V1 values | PROPOSED V2 values |
+|---|---|---|
+| `mineral_class` | `native_elements`, `sulfides_sulfosalts`, `halides`, `oxides_hydroxides`, `carbonates_nitrates`, `borates`, `sulfates_chromates_molybdates_tungstates`, `phosphates_arsenates_vanadates`, `silicates`, `organic` | Same as CURRENT V1 |
+| `silicate_subclass` | `nesosilicates`, `sorosilicates`, `cyclosilicates`, `inosilicates`, `phyllosilicates`, `tectosilicates` | Same as CURRENT V1 |
+| `mineral_family` | `garnet_group`, `feldspar_group`, `quartz_group`, `tourmaline_group`, `mica_group`, `pyroxene_group`, `amphibole_group`, `zeolite_group`, `beryl_group`, `spinel_group`, `corundum_group`, `calcite_group` | Same as CURRENT V1 |
+| `crystal_system` | `monoclinic`, `orthorhombic`, `hexagonal`, `isometric`, `triclinic`, `tetragonal`, `amorphous` | `monoclinic`, `orthorhombic`, `hexagonal`, `trigonal`, `isometric`, `triclinic`, `tetragonal`, `amorphous` |
+| `crystal_habit` | `prismatic`, `acicular`, `tabular`, `platy`, `foliated`, `fibrous`, `granular`, `massive`, `druzy`, `radiating`, `globular`, `reniform`, `botryoidal`, `columnar`, `cubic`, `rhombohedral`, `dendritic`, `earthy` | Same as CURRENT V1 |
+| `streak` | `black`, `white_or_colourless`, `grey`, `green`, `blue`, `brown`, `pink_to_red`, `yellow_to_orange` | Same as CURRENT V1 |
+| `transparency` | `transparent`, `translucent`, `opaque` | Same as CURRENT V1 |
+| `luster` | `vitreous`, `adamantine`, `metallic`, `submetallic`, `pearly`, `silky`, `resinous`, `greasy`, `waxy`, `dull`, `earthy` | Same as CURRENT V1 |
+| `tenacity` | `brittle`, `malleable`, `ductile`, `sectile`, `flexible`, `elastic` | Same as CURRENT V1 |
+| `fracture` | `conchoidal`, `uneven`, `splintery`, `hackly`, `earthy`, `fibrous` | Same as CURRENT V1 |
+| `cleavage_degree` | `none`, `very_poor`, `poor`, `good`, `perfect` | Same as CURRENT V1 |
+| `cleavage_direction` | `1`, `2`, `3`, `4` (JSON strings) | Same as CURRENT V1 |
+| `cleavage_type` | `basal`, `prismatic`, `pinacoidal`, `rhombohedral`, `cubic`, `octahedral`, `dodecahedral` | Same as CURRENT V1 |
+| `phenomena` | `asterism`, `iridescence`, `aventurescence`, `adularescence`, `labradorescence`, `chatoyancy`, `opalescence`, `color_change` | Same as CURRENT V1 |
+| `ima_status` | `approved`, `grandfathered`, `questionable`, `discredited` | Same as CURRENT V1 |
+| `rock_type` | `igneous`, `sedimentary`, `metamorphic` | Same as CURRENT V1 |
+| `rarity` | `common`, `uncommon`, `rare`, `very_rare` | Same as CURRENT V1 |
+| `base_color` | `red`, `black`, `bi_color`, `blue`, `brown`, `green`, `yellow`, `grey`, `purple`, `white`, `pink`, `multicolor`, `orange` | Same as CURRENT V1 |
 
-Known enum issues, not code changes in this stage:
+Except for `crystal_system`, the PROPOSED V2 values are the same as the CURRENT V1 values shown in the remaining rows of this table.
 
-- `crystal_system` lacks `trigonal`. This is an objectively relevant gap to resolve through a separately reviewed enum change; V2 clients must not invent the code before it is adopted.
+Known enum issues, not Go code changes in this stage:
+
+- CURRENT V1 `crystal_system` lacks `trigonal`; PROPOSED V2 deliberately adds it to close that known gap. The Go enum remains unchanged at this stage.
 - `mineral_family` is explicitly a starting list and may not cover the catalogue.
 - `crystal_habit` combines individual crystal habits and aggregate habits. Splitting them is a future possibility.
 - `cleavage_direction` currently models counts as strings. A later version may consider a numeric representation, but V2 initially preserves current codes.
@@ -161,16 +163,17 @@ These meanings apply to stored representations, full responses, and input valida
 
 | Representation | Meaning |
 |---|---|
-| field omitted | Unknown, not supplied, not applicable, or (in PATCH only) leave unchanged. Canonical responses may omit optional nulls. |
-| `null` | Explicitly unknown/not applicable; in PATCH, clear the field. |
+| field omitted | No property value is provided; in PATCH only, leave unchanged. Canonical responses may omit optional nulls. Omission alone does not encode why the value is absent. |
+| `null` | The property value is explicitly absent, unknown, or not provided as a fact; in PATCH, clear the field. `null` does not encode a separate “not applicable” reason. |
 | `[]` | Collection is known to contain no values; in PATCH, replace/clear the collection to empty. |
 | `""` | Invalid as a meaningful human-text or formula value. Trimmed empty input is rejected or normalized to `null` by an explicitly documented boundary rule, never stored as knowledge. |
 | semantic enum such as `"none"` | A known scientific fact, only when that enum defines real absence. It is not a substitute for unknown/N/A. |
 
 Specific cases:
 
-- `hardness`, `specific_gravity`: omitted/null means unknown or N/A; a present object must be complete and valid.
-- `chemical_formula`, `crystal_system`, `mineral_class`, `ima_status`: omitted/null means unknown or N/A for the type; `""` and fabricated codes are invalid.
+- Applicability is determined by entity `type`, the applicability matrix, and the semantics of the specific property. Clients must not treat every `null` as proof that a property is not applicable. V2 does not add a status object or a separate N/A enum at this stage.
+- `hardness`, `specific_gravity`: omitted/null means no value is provided; a present object must be complete and valid.
+- `chemical_formula`, `crystal_system`, `mineral_class`, `ima_status`: omitted/null means no value is provided. Whether the property applies is determined separately; `""` and fabricated codes are invalid.
 - `phenomena: []`: known to have no recorded optical phenomena; omitted/null: not assessed or unknown. No phenomenon is required.
 - `gallery: []`, `localities: []`: known to have no entries/currently no verified entries; omitted/null: not supplied or not assessed. Both empty arrays are valid on creation.
 - In ordinary full GET responses, the API should serialize known empty collections as `[]` consistently and either omit unknown optional fields or return `null` according to one endpoint-wide serialization policy. It must not change meaning between entities.
@@ -242,7 +245,7 @@ GalleryImageV2 {
 }
 ```
 
-`slug` and `storage_key` are independent: `kambaba-jasper` versus `kambaba_jasper`. `path` is storage-relative (it may include the storage key, as in the deployed CDN layout), never inferred from slug. The API/configuration resolves it against one CDN base. Gallery length and filenames are arbitrary; no sequential naming convention is contractual. The implementation must reject unsafe traversal/absolute filesystem paths.
+`slug` and `storage_key` are independent: `kambaba-jasper` versus `kambaba_jasper`. `storage_key` contains the object's root folder. Every `path` is relative to `storage_key` and never repeats it; the canonical full object key is `<storage_key>/<path>`. For example, `storage_key: "kambaba_jasper"` and `path: "gallery/kambaba_jasper00.webp"` resolve to `kambaba_jasper/gallery/kambaba_jasper00.webp`. There is exactly one canonical representation of a managed object. Neither value is inferred from `slug`. The API/configuration resolves the full object key against one CDN base. Gallery length and filenames are arbitrary; no sequential naming convention is contractual. The implementation must reject unsafe traversal/absolute filesystem paths.
 
 For backward-compatible read responses during migration, the API may expose computed legacy `main_image_url`, `thumbnail_url`, and `gallery[].url`, but these are **DEPRECATED**, must be derived from V2 media where possible, and are not canonical V2 write fields. Absolute external URLs that cannot be represented in managed storage must be preserved during migration, for example through a documented external-URL compatibility variant; they must not be truncated or guessed.
 
@@ -332,7 +335,7 @@ No SQL is specified here. A future implementation should:
 
 ## 18. Complete Kambaba Jasper example
 
-The example demonstrates the contract, not a claim that every value is already verified in the repository. Only the supplied hardness range and storage layout are populated as scientific/media facts. Unknown scientific properties are explicitly `null` or omitted; the source is a placeholder-shaped record whose bibliographic fields must be replaced with a verified source before production publication.
+The example demonstrates the contract, not a claim that every value is already verified in the repository. Only the supplied hardness range and storage layout are populated as scientific/media facts. Unknown scientific properties are explicitly `null` or omitted, and collections without verified entries use `[]`.
 
 ```json
 {
@@ -346,7 +349,7 @@ The example demonstrates the contract, not a claim that every value is already v
     },
     "specific_gravity": null,
     "rarity": null,
-    "base_color": "green",
+    "base_color": null,
     "mineral_class": null,
     "silicate_subclass": null,
     "mineral_family": null,
@@ -368,55 +371,42 @@ The example demonstrates the contract, not a claim that every value is already v
     "ru": {
       "name": "Камбаба-яшма",
       "synonyms": [],
-      "color": ["зелёный"],
+      "color": [],
       "color_description": null,
       "lore": null,
       "identification_tips": null,
       "safety_notes": null,
       "scientific_notes": {
-        "hardness": "Твёрдость может варьировать из-за полиминерального состава.",
+        "hardness": null,
         "composition": null
       }
     },
     "en": {
       "name": "Kambaba Jasper",
       "synonyms": [],
-      "color": ["green"],
+      "color": [],
       "color_description": null,
       "lore": null,
       "identification_tips": null,
       "safety_notes": null,
       "scientific_notes": {
-        "hardness": "Hardness may vary because of the polymineralic composition.",
+        "hardness": null,
         "composition": null
       }
     }
   },
-  "localities": [
-    {
-      "country_code": "MG",
-      "country_ru": "Мадагаскар",
-      "country_en": "Madagascar",
-      "region_ru": null,
-      "region_en": null,
-      "locality_ru": null,
-      "locality_en": null,
-      "description_ru": null,
-      "description_en": null,
-      "famous": false
-    }
-  ],
+  "localities": [],
   "images": {
     "storage_key": "kambaba_jasper",
     "hero": {
-      "path": "kambaba_jasper/hero.webp"
+      "path": "hero.webp"
     },
     "thumbnail": {
-      "path": "kambaba_jasper/thumbnail.webp"
+      "path": "thumbnail.webp"
     },
     "gallery": [
       {
-        "path": "kambaba_jasper/gallery/kambaba_jasper00.webp",
+        "path": "gallery/kambaba_jasper00.webp",
         "type": null,
         "caption": {
           "ru": null,
@@ -424,7 +414,7 @@ The example demonstrates the contract, not a claim that every value is already v
         }
       },
       {
-        "path": "kambaba_jasper/gallery/kambaba_jasper01.webp",
+        "path": "gallery/kambaba_jasper01.webp",
         "type": null,
         "caption": {
           "ru": null,
@@ -432,7 +422,7 @@ The example demonstrates the contract, not a claim that every value is already v
         }
       },
       {
-        "path": "kambaba_jasper/gallery/kambaba_jasper02.webp",
+        "path": "gallery/kambaba_jasper02.webp",
         "type": null,
         "caption": {
           "ru": null,
@@ -441,22 +431,12 @@ The example demonstrates the contract, not a claim that every value is already v
       }
     ]
   },
-  "related_entities": [
-    "jasper",
-    "chalcedony"
-  ],
-  "sources": [
-    {
-      "title": "Verified mineralogical source required before publication",
-      "url": null,
-      "author": null,
-      "publisher": null
-    }
-  ]
+  "related_entities": [],
+  "sources": []
 }
 ```
 
-Notes on unknowns: `null` above is intentional and must not be replaced with mineral-oriented defaults. The example’s `MG` locality, broad green category, localized common names, note wording, and related slugs illustrate requested model features; they require normal editorial/source verification before becoming production facts. In real production data, prefer omitting an unverified `sources` entry entirely over storing a placeholder title.
+Notes on unknowns: `null` above is intentional and must not be replaced with mineral-oriented defaults. `localities`, `related_entities`, and `sources` are `[]` because this canonical example contains no verified entries for those collections; this demonstrates known-empty collection semantics without inventing scientific or bibliographic data.
 
 ## 19. Implementation checklist
 
@@ -486,7 +466,7 @@ Notes on unknowns: `null` above is intentional and must not be replaced with min
 
 ## 20. Open questions / future extensions
 
-- Review and formally add missing scientific enum values, especially `crystal_system=trigonal`, without silently changing existing codes.
+- Implement the PROPOSED V2 addition `crystal_system=trigonal` through a separately reviewed Go enum and migration change; CURRENT V1 remains unchanged by this specification edit.
 - Decide whether to separate individual crystal habit from aggregate habit and whether cleavage-direction count should become numeric.
 - Define the minimum required localized content per publication state (draft versus published), independently of scientific applicability.
 - Decide the canonical representation for unmanaged external image URLs and adopt optional localized `alt`, `creator`, `source_url`, and `license` metadata.

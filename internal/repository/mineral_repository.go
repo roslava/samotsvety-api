@@ -30,6 +30,15 @@ type MineralRepository interface {
 	Delete(ctx context.Context, slug string) error
 }
 
+// GemEntityV2Repository is the canonical V2 persistence boundary. The V1
+// interface above remains temporarily for handlers and legacy media upload.
+type GemEntityV2Repository interface {
+	GetV2BySlug(ctx context.Context, slug string) (*domain.GemEntityV2, error)
+	ListV2(ctx context.Context) ([]domain.GemEntityV2, error)
+	CreateV2(ctx context.Context, entity *domain.GemEntityV2) error
+	UpdateV2(ctx context.Context, oldSlug string, entity *domain.GemEntityV2) error
+}
+
 // FilterValues содержит доступные значения для фильтрации
 type FilterValues struct {
 	Rarities      []string `json:"rarities"`
