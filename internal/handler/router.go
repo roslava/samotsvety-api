@@ -17,6 +17,7 @@ func NewRouter(mineralRepo repository.MineralRepository, postRepo repository.Pos
 	router.Use(middleware.CORS())
 
 	mineralHandler := NewMineralHandler(mineralRepo)
+	v2Repo, hasV2Repo := mineralRepo.(repository.GemEntityV2Repository)
 	postHandler := NewPostHandler(postRepo)
 	mediaHandler := NewMediaHandler(mediaStorage)
 
@@ -67,6 +68,25 @@ func NewRouter(mineralRepo repository.MineralRepository, postRepo repository.Pos
 		media.Use(middleware.APIKeyAuth())
 		{
 			media.POST("", mediaHandler.UploadMedia)
+		}
+	}
+
+	// API v2 is deliberately separate from v1: it only accepts the canonical
+	// V2 payload and never routes a V2 write through legacy DTOs.
+	if hasV2Repo {
+		v2Handler := NewGemEntityV2Handler(v2Repo)
+		v2 := router.Group("/api/v2/gem-entities")
+		{
+			v2.GET("", v2Handler.List)
+			v2.GET("/:slug", v2Handler.Get)
+
+			admin := v2.Group("")
+			admin.Use(middleware.APIKeyAuth())
+			{
+				admin.POST("", v2Handler.Create)
+				admin.PUT("/:slug", v2Handler.Replace)
+				admin.PATCH("/:slug", v2Handler.Patch)
+			}
 		}
 	}
 
