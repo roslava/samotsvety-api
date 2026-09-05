@@ -73,7 +73,7 @@ func TestGemEntityV2RowRoundTrip(t *testing.T) {
 	entity.Scientific.BaseColor = domain.BaseColorGreen
 	entity.Scientific.CrystalSystem = domain.CrystalSystemTrigonal
 	entity.Localities = []domain.LocalityV2{
-		{CountryCode: "MG", CountryEn: "Madagascar"},
+		{CountryCode: "MG", CountryEn: "Madagascar", Latitude: coordinateFloat64Ptr(-16.4), Longitude: coordinateFloat64Ptr(46.5), CoordinatePrecision: domain.CoordinatePrecisionApproximate},
 		{CountryCode: "RU", CountryRu: "Россия"},
 		{},
 	}
@@ -102,6 +102,8 @@ func TestGemEntityV2RowRoundTrip(t *testing.T) {
 		t.Fatalf("gallery/caption lost: %#v", got.Images.Gallery)
 	}
 }
+
+func coordinateFloat64Ptr(value float64) *float64 { return &value }
 
 func TestGemEntityV2AbsentRangesAndEmptyCollectionsRoundTrip(t *testing.T) {
 	entity := kambabaV2Fixture()

@@ -20,6 +20,8 @@ func minimalV2(entityType EntityType) GemEntityV2 {
 	}
 }
 
+func float64Ptr(value float64) *float64 { return &value }
+
 func TestGemEntityV2ValidationCases(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -50,6 +52,26 @@ func TestGemEntityV2ValidationCases(t *testing.T) {
 		{name: "country code MG", mutate: func(m *GemEntityV2) { m.Localities = []LocalityV2{{CountryCode: "MG"}} }},
 		{name: "country code RU", mutate: func(m *GemEntityV2) { m.Localities = []LocalityV2{{CountryCode: "RU"}} }},
 		{name: "country code malformed", mutate: func(m *GemEntityV2) { m.Localities = []LocalityV2{{CountryCode: "rus"}} }, wantPath: "localities[0].country_code"},
+		{name: "locality without coordinates remains valid", mutate: func(m *GemEntityV2) {
+			m.Localities = []LocalityV2{{CountryCode: "MG", RegionEn: "Bongolava", LocalityEn: "Kambaba Jasper occurrence"}}
+		}},
+		{name: "valid locality coordinates", mutate: func(m *GemEntityV2) {
+			m.Localities = []LocalityV2{{Latitude: float64Ptr(-16.4), Longitude: float64Ptr(46.5)}}
+		}},
+		{name: "valid exact coordinate precision", mutate: func(m *GemEntityV2) { m.Localities = []LocalityV2{{CoordinatePrecision: CoordinatePrecisionExact}} }},
+		{name: "valid approximate coordinate precision", mutate: func(m *GemEntityV2) {
+			m.Localities = []LocalityV2{{CoordinatePrecision: CoordinatePrecisionApproximate}}
+		}},
+		{name: "valid region coordinate precision", mutate: func(m *GemEntityV2) { m.Localities = []LocalityV2{{CoordinatePrecision: CoordinatePrecisionRegion}} }},
+		{name: "latitude negative boundary", mutate: func(m *GemEntityV2) { m.Localities = []LocalityV2{{Latitude: float64Ptr(-90)}} }},
+		{name: "latitude positive boundary", mutate: func(m *GemEntityV2) { m.Localities = []LocalityV2{{Latitude: float64Ptr(90)}} }},
+		{name: "latitude below range", mutate: func(m *GemEntityV2) { m.Localities = []LocalityV2{{Latitude: float64Ptr(-90.1)}} }, wantPath: "localities[0].latitude"},
+		{name: "latitude above range", mutate: func(m *GemEntityV2) { m.Localities = []LocalityV2{{Latitude: float64Ptr(90.1)}} }, wantPath: "localities[0].latitude"},
+		{name: "longitude negative boundary", mutate: func(m *GemEntityV2) { m.Localities = []LocalityV2{{Longitude: float64Ptr(-180)}} }},
+		{name: "longitude positive boundary", mutate: func(m *GemEntityV2) { m.Localities = []LocalityV2{{Longitude: float64Ptr(180)}} }},
+		{name: "longitude below range", mutate: func(m *GemEntityV2) { m.Localities = []LocalityV2{{Longitude: float64Ptr(-180.1)}} }, wantPath: "localities[0].longitude"},
+		{name: "longitude above range", mutate: func(m *GemEntityV2) { m.Localities = []LocalityV2{{Longitude: float64Ptr(180.1)}} }, wantPath: "localities[0].longitude"},
+		{name: "coordinate precision unknown", mutate: func(m *GemEntityV2) { m.Localities = []LocalityV2{{CoordinatePrecision: "estimated"}} }, wantPath: "localities[0].coordinate_precision"},
 		{name: "empty localities", mutate: func(m *GemEntityV2) { m.Localities = []LocalityV2{} }},
 		{name: "empty sources", mutate: func(m *GemEntityV2) { m.Sources = []SourceV2{} }},
 		{name: "source optional URL valid", mutate: func(m *GemEntityV2) { m.Sources = []SourceV2{{URL: "https://example.org/source"}} }},
@@ -89,6 +111,21 @@ func TestGemEntityV2ValidationCases(t *testing.T) {
 				t.Fatalf("Validate() error = %q, want path %q", err, tt.wantPath)
 			}
 		})
+	}
+}
+
+func TestLocalityV2CoordinatesJSONNullableAndBackwardCompatible(t *testing.T) {
+	var locality LocalityV2
+	if err := json.Unmarshal([]byte(`{"country_code":"MG","latitude":null,"longitude":null,"coordinate_precision":null}`), &locality); err != nil {
+		t.Fatal(err)
+	}
+	if locality.Latitude != nil || locality.Longitude != nil || locality.CoordinatePrecision != "" {
+		t.Fatalf("null coordinates were not preserved as absent: %#v", locality)
+	}
+	entity := minimalV2(TypeRock)
+	entity.Localities = []LocalityV2{locality}
+	if err := entity.Validate(); err != nil {
+		t.Fatalf("legacy locality without coordinates rejected: %v", err)
 	}
 }
 

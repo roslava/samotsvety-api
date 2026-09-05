@@ -264,7 +264,7 @@ var leaf = v2SchemaNode{}
 var v2Schema = v2SchemaNode{
 	"slug": leaf, "type": leaf, "scientific": {"chemical_formula": leaf, "hardness": {"min": leaf, "max": leaf}, "specific_gravity": {"min": leaf, "max": leaf}, "rarity": leaf, "base_color": leaf, "mineral_class": leaf, "silicate_subclass": leaf, "mineral_family": leaf, "crystal_system": leaf, "crystal_habit": leaf, "streak": leaf, "transparency": leaf, "luster": leaf, "tenacity": leaf, "fracture": leaf, "cleavage_degree": leaf, "cleavage_direction": leaf, "cleavage_type": leaf, "phenomena": leaf, "ima_status": leaf, "rock_type": leaf},
 	"i18n":             {"ru": localizedSchema(), "en": localizedSchema()},
-	"localities":       {"country_code": leaf, "country_ru": leaf, "country_en": leaf, "region_ru": leaf, "region_en": leaf, "locality_ru": leaf, "locality_en": leaf, "description_ru": leaf, "description_en": leaf, "famous": leaf},
+	"localities":       {"country_code": leaf, "country_ru": leaf, "country_en": leaf, "region_ru": leaf, "region_en": leaf, "locality_ru": leaf, "locality_en": leaf, "description_ru": leaf, "description_en": leaf, "famous": leaf, "latitude": leaf, "longitude": leaf, "coordinate_precision": leaf},
 	"images":           {"storage_key": leaf, "hero": {"path": leaf}, "thumbnail": {"path": leaf}, "gallery": {"path": leaf, "type": leaf, "caption": {"ru": leaf, "en": leaf}}},
 	"related_entities": leaf, "sources": {"title": leaf, "url": leaf, "author": leaf, "publisher": leaf},
 }

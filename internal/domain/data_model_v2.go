@@ -79,17 +79,30 @@ type I18nV2 struct {
 }
 
 type LocalityV2 struct {
-	CountryCode   string `json:"country_code,omitempty"`
-	CountryRu     string `json:"country_ru,omitempty"`
-	CountryEn     string `json:"country_en,omitempty"`
-	RegionRu      string `json:"region_ru,omitempty"`
-	RegionEn      string `json:"region_en,omitempty"`
-	LocalityRu    string `json:"locality_ru,omitempty"`
-	LocalityEn    string `json:"locality_en,omitempty"`
-	DescriptionRu string `json:"description_ru,omitempty"`
-	DescriptionEn string `json:"description_en,omitempty"`
-	Famous        bool   `json:"famous,omitempty"`
+	CountryCode         string              `json:"country_code,omitempty"`
+	CountryRu           string              `json:"country_ru,omitempty"`
+	CountryEn           string              `json:"country_en,omitempty"`
+	RegionRu            string              `json:"region_ru,omitempty"`
+	RegionEn            string              `json:"region_en,omitempty"`
+	LocalityRu          string              `json:"locality_ru,omitempty"`
+	LocalityEn          string              `json:"locality_en,omitempty"`
+	DescriptionRu       string              `json:"description_ru,omitempty"`
+	DescriptionEn       string              `json:"description_en,omitempty"`
+	Famous              bool                `json:"famous,omitempty"`
+	Latitude            *float64            `json:"latitude,omitempty"`
+	Longitude           *float64            `json:"longitude,omitempty"`
+	CoordinatePrecision CoordinatePrecision `json:"coordinate_precision,omitempty"`
 }
+
+// CoordinatePrecision describes how closely locality coordinates identify a
+// real-world place. Coordinates remain optional canonical locality data.
+type CoordinatePrecision string
+
+const (
+	CoordinatePrecisionExact       CoordinatePrecision = "exact"
+	CoordinatePrecisionApproximate CoordinatePrecision = "approximate"
+	CoordinatePrecisionRegion      CoordinatePrecision = "region"
+)
 
 type ImageRefV2 struct {
 	Path string `json:"path"`
@@ -199,6 +212,27 @@ func (m *GemEntityV2) Validate() error {
 	for i, locality := range m.Localities {
 		if locality.CountryCode != "" && !countryCodePattern.MatchString(locality.CountryCode) {
 			return validationError(fmt.Sprintf("localities[%d].country_code", i), "must be two uppercase ASCII letters")
+		}
+		if locality.Latitude != nil {
+			path := fmt.Sprintf("localities[%d].latitude", i)
+			if !finite(*locality.Latitude) {
+				return validationError(path, "must be a finite number")
+			}
+			if *locality.Latitude < -90 || *locality.Latitude > 90 {
+				return validationError(path, "must be between -90 and 90")
+			}
+		}
+		if locality.Longitude != nil {
+			path := fmt.Sprintf("localities[%d].longitude", i)
+			if !finite(*locality.Longitude) {
+				return validationError(path, "must be a finite number")
+			}
+			if *locality.Longitude < -180 || *locality.Longitude > 180 {
+				return validationError(path, "must be between -180 and 180")
+			}
+		}
+		if err := validateEnum(fmt.Sprintf("localities[%d].coordinate_precision", i), locality.CoordinatePrecision, CoordinatePrecisionExact, CoordinatePrecisionApproximate, CoordinatePrecisionRegion); err != nil {
+			return err
 		}
 	}
 	seenRelations := make(map[string]struct{}, len(m.RelatedEntities))

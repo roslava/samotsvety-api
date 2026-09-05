@@ -77,6 +77,37 @@ func TestV2CreateRejectsUnknownAndDuplicateNestedFields(t *testing.T) {
 	}
 }
 
+func TestV2CreateValidatesLocalityCoordinates(t *testing.T) {
+	tests := []struct {
+		name       string
+		localities string
+		wantStatus int
+		wantPath   string
+	}{
+		{name: "existing locality without coordinates", localities: `[{"country_code":"MG","region_en":"Bongolava","locality_en":"Kambaba Jasper occurrence"}]`, wantStatus: http.StatusCreated},
+		{name: "valid coordinates", localities: `[{"country_code":"MG","latitude":-16.4,"longitude":46.5,"coordinate_precision":"approximate"}]`, wantStatus: http.StatusCreated},
+		{name: "latitude out of range", localities: `[{"latitude":90.1}]`, wantStatus: http.StatusBadRequest, wantPath: "localities[0].latitude"},
+		{name: "longitude out of range", localities: `[{"longitude":-180.1}]`, wantStatus: http.StatusBadRequest, wantPath: "localities[0].longitude"},
+		{name: "unknown precision", localities: `[{"coordinate_precision":"estimated"}]`, wantStatus: http.StatusBadRequest, wantPath: "localities[0].coordinate_precision"},
+		{name: "unknown coordinate field remains rejected", localities: `[{"altitude":100}]`, wantStatus: http.StatusBadRequest, wantPath: "localities[0].altitude"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := []byte(`{"slug":"test-gem","type":"mineral","scientific":{},"i18n":{"ru":{"name":"Тест"},"en":{"name":"Test"}},"localities":` + tt.localities + `,"related_entities":[],"sources":[]}`)
+			recorder := httptest.NewRecorder()
+			context, _ := gin.CreateTestContext(recorder)
+			context.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+			NewGemEntityV2Handler(newV2RepositoryStub(&domain.GemEntityV2{Slug: "existing"})).Create(context)
+			if recorder.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", recorder.Code, tt.wantStatus, recorder.Body.String())
+			}
+			if tt.wantPath != "" && !bytes.Contains(recorder.Body.Bytes(), []byte(`"path":"`+tt.wantPath+`"`)) {
+				t.Fatalf("response path missing %q: %s", tt.wantPath, recorder.Body.String())
+			}
+		})
+	}
+}
+
 func TestV2PatchMergesNestedObjectsAndRevalidates(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	var entity domain.GemEntityV2
@@ -105,6 +136,20 @@ func TestV2PatchMergesNestedObjectsAndRevalidates(t *testing.T) {
 	NewGemEntityV2Handler(repo).Patch(context)
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodPatch, "/", bytes.NewBufferString(`{"localities":[{"country_code":"MG","latitude":-16.4,"longitude":46.5,"coordinate_precision":"approximate"}]}`))
+	recorder = httptest.NewRecorder()
+	context, _ = gin.CreateTestContext(recorder)
+	context.Request = request
+	context.Params = gin.Params{{Key: "slug", Value: "test-gem"}}
+	NewGemEntityV2Handler(repo).Patch(context)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("coordinate PATCH status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	locality := repo.entities["test-gem"].Localities[0]
+	if locality.Latitude == nil || locality.Longitude == nil || *locality.Latitude != -16.4 || *locality.Longitude != 46.5 || locality.CoordinatePrecision != domain.CoordinatePrecisionApproximate {
+		t.Fatalf("coordinate PATCH did not replace localities correctly: %#v", locality)
 	}
 }
 

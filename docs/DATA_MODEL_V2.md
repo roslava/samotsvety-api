@@ -219,10 +219,15 @@ LocalityV2 {
   description_ru?: string | null
   description_en?: string | null
   famous?: boolean
+  latitude?: number | null              # -90 <= latitude <= 90
+  longitude?: number | null             # -180 <= longitude <= 180
+  coordinate_precision?: exact | approximate | region | null
 }
 ```
 
 Examples of `country_code` are `MG`, `BR`, `US`, and `RU`. The code is the universal identity/filter key; localized country fields are display labels/snapshots and must agree with it. No country has special priority. `famous` is retained because it exists in the current model and can express editorial prominence, but absence should behave as `false`.
+
+Coordinates are optional and are stored directly in the canonical locality object. `exact` identifies a known mine, quarry, occurrence, or point; `approximate` is an approximate locality position; `region` represents a region or larger geographic area rather than a particular find. A locality without coordinates remains valid. Missing coordinates must not be inferred, geocoded, or replaced with fabricated values.
 
 `is_russian` is **DEPRECATED** and is not fundamental V2 data. Derive it as `country_code == "RU"`. Likewise, the current `russian_only` filter is legacy/deprecated behavior; the universal filter must use `country_code` (and may support localized country search separately). Localities are optional and `[]` is valid when verified data is unavailable.
 
