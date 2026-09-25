@@ -217,3 +217,51 @@ func TestPostgresGemEntityV2CRUDTypeRegression(t *testing.T) {
 		t.Fatalf("list did not retain type: %#v", listed)
 	}
 }
+
+func TestPostgresGemEntityV2DeleteV2(t *testing.T) {
+	db := getTestDB(t)
+	defer db.Close()
+	defer cleanupTestData(t, db)
+
+	repo := NewPostgresMineralRepository(db)
+	deleted := kambabaV2Fixture()
+	retained := kambabaV2Fixture()
+	retained.Slug = "retained-gem"
+	if err := repo.CreateV2(context.Background(), deleted); err != nil {
+		t.Fatalf("create deleted fixture: %v", err)
+	}
+	if err := repo.CreateV2(context.Background(), retained); err != nil {
+		t.Fatalf("create retained fixture: %v", err)
+	}
+
+	if err := repo.DeleteV2(context.Background(), deleted.Slug); err != nil {
+		t.Fatalf("delete by slug: %v", err)
+	}
+	if _, err := repo.GetV2BySlug(context.Background(), deleted.Slug); err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("deleted entity get error = %v, want not found", err)
+	}
+	if _, err := repo.GetV2BySlug(context.Background(), retained.Slug); err != nil {
+		t.Fatalf("delete affected a different slug: %v", err)
+	}
+}
+
+func TestPostgresGemEntityV2DeleteV2NotFound(t *testing.T) {
+	db := getTestDB(t)
+	defer db.Close()
+	defer cleanupTestData(t, db)
+
+	err := NewPostgresMineralRepository(db).DeleteV2(context.Background(), "missing-gem")
+	if err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("delete missing error = %v, want not found", err)
+	}
+}
+
+func TestPostgresGemEntityV2DeleteV2DatabaseError(t *testing.T) {
+	db := getTestDB(t)
+	db.Close()
+
+	err := NewPostgresMineralRepository(db).DeleteV2(context.Background(), "test-gem")
+	if err == nil || !strings.Contains(err.Error(), "failed to delete V2 mineral") {
+		t.Fatalf("delete database error = %v, want contextual database error", err)
+	}
+}

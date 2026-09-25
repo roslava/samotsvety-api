@@ -161,6 +161,14 @@ func (h *GemEntityV2Handler) Patch(c *gin.Context) {
 	h.respondUpdated(c, entity)
 }
 
+func (h *GemEntityV2Handler) Delete(c *gin.Context) {
+	if err := h.repo.DeleteV2(c.Request.Context(), c.Param("slug")); err != nil {
+		respondRepositoryV2Error(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func (h *GemEntityV2Handler) respondUpdated(c *gin.Context, fallback *domain.GemEntityV2) {
 	// PostgreSQL owns updated_at (NOW()); return the persisted representation so
 	// the response never advertises the stale pre-update timestamp.

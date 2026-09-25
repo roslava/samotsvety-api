@@ -86,6 +86,7 @@ func NewRouter(mineralRepo repository.MineralRepository, postRepo repository.Pos
 				admin.POST("", v2Handler.Create)
 				admin.PUT("/:slug", v2Handler.Replace)
 				admin.PATCH("/:slug", v2Handler.Patch)
+				admin.DELETE("/:slug", v2Handler.Delete)
 			}
 		}
 	}

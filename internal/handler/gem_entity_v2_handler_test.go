@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,7 +15,9 @@ import (
 )
 
 type v2RepositoryStub struct {
-	entities map[string]*domain.GemEntityV2
+	entities    map[string]*domain.GemEntityV2
+	deleteErr   error
+	deletedSlug string
 }
 
 func newV2RepositoryStub(entity *domain.GemEntityV2) *v2RepositoryStub {
@@ -45,6 +48,17 @@ func (r *v2RepositoryStub) UpdateV2(_ context.Context, oldSlug string, entity *d
 	}
 	delete(r.entities, oldSlug)
 	r.entities[entity.Slug] = entity
+	return nil
+}
+func (r *v2RepositoryStub) DeleteV2(_ context.Context, slug string) error {
+	r.deletedSlug = slug
+	if r.deleteErr != nil {
+		return r.deleteErr
+	}
+	if _, ok := r.entities[slug]; !ok {
+		return errV2NotFound{}
+	}
+	delete(r.entities, slug)
 	return nil
 }
 
@@ -165,5 +179,53 @@ func TestV2ListFiltersCountryCode(t *testing.T) {
 	NewGemEntityV2Handler(repo).List(context)
 	if recorder.Code != http.StatusOK || !bytes.Contains(recorder.Body.Bytes(), []byte(`"slug":"second"`)) || bytes.Contains(recorder.Body.Bytes(), []byte(`"slug":"first"`)) {
 		t.Fatalf("unexpected response: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestV2Delete(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tests := []struct {
+		name       string
+		repo       *v2RepositoryStub
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "success",
+			repo:       newV2RepositoryStub(&domain.GemEntityV2{Slug: "test-gem"}),
+			wantStatus: http.StatusNoContent,
+		},
+		{
+			name:       "not found",
+			repo:       newV2RepositoryStub(&domain.GemEntityV2{Slug: "other-gem"}),
+			wantStatus: http.StatusNotFound,
+			wantBody:   `"error":"not_found"`,
+		},
+		{
+			name:       "repository error",
+			repo:       &v2RepositoryStub{entities: map[string]*domain.GemEntityV2{}, deleteErr: errors.New("database unavailable")},
+			wantStatus: http.StatusInternalServerError,
+			wantBody:   `"error":"internal_error"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			context, _ := gin.CreateTestContext(recorder)
+			context.Request = httptest.NewRequest(http.MethodDelete, "/", nil)
+			context.Params = gin.Params{{Key: "slug", Value: "test-gem"}}
+
+			NewGemEntityV2Handler(tt.repo).Delete(context)
+
+			if context.Writer.Status() != tt.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", context.Writer.Status(), tt.wantStatus, recorder.Body.String())
+			}
+			if tt.wantBody != "" && !bytes.Contains(recorder.Body.Bytes(), []byte(tt.wantBody)) {
+				t.Fatalf("body = %q, want it to contain %q", recorder.Body.String(), tt.wantBody)
+			}
+			if tt.repo.deletedSlug != "test-gem" {
+				t.Fatalf("DeleteV2 slug = %q, want test-gem", tt.repo.deletedSlug)
+			}
+		})
 	}
 }

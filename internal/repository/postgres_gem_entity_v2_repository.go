@@ -179,3 +179,18 @@ func (r *PostgresMineralRepository) UpdateV2(ctx context.Context, oldSlug string
 	}
 	return nil
 }
+
+func (r *PostgresMineralRepository) DeleteV2(ctx context.Context, slug string) error {
+	result, err := r.db.ExecContext(ctx, `DELETE FROM minerals WHERE slug = $1`, slug)
+	if err != nil {
+		return fmt.Errorf("failed to delete V2 mineral: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check V2 delete result: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("mineral not found")
+	}
+	return nil
+}

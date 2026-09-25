@@ -37,6 +37,7 @@ type GemEntityV2Repository interface {
 	ListV2(ctx context.Context) ([]domain.GemEntityV2, error)
 	CreateV2(ctx context.Context, entity *domain.GemEntityV2) error
 	UpdateV2(ctx context.Context, oldSlug string, entity *domain.GemEntityV2) error
+	DeleteV2(ctx context.Context, slug string) error
 }
 
 // FilterValues содержит доступные значения для фильтрации
