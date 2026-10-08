@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -68,6 +69,28 @@ func (h *GemEntityV2Handler) Get(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, entity)
+}
+
+// Related returns existing direct and reverse links without loading the catalog.
+func (h *GemEntityV2Handler) Related(c *gin.Context) {
+	slug := c.Param("slug")
+	if _, err := h.repo.GetV2BySlug(c.Request.Context(), slug); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			RespondNotFound(c, "Gem entity not found")
+		} else {
+			RespondInternalError(c, "Failed to fetch gem entity")
+		}
+		return
+	}
+	items, err := h.repo.GetV2Related(c.Request.Context(), slug)
+	if err != nil {
+		RespondInternalError(c, "Failed to fetch related gem entities")
+		return
+	}
+	if items == nil {
+		items = []repository.RelatedGemEntityV2{}
+	}
+	c.JSON(http.StatusOK, gin.H{"data": items})
 }
 
 func (h *GemEntityV2Handler) Create(c *gin.Context) {

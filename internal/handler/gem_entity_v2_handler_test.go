@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -12,31 +13,107 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/roslava/samotsvety-api/internal/domain"
+	"github.com/roslava/samotsvety-api/internal/repository"
 )
 
 type v2RepositoryStub struct {
-	entities    map[string]*domain.GemEntityV2
-	deleteErr   error
-	deletedSlug string
+	entities     map[string]*domain.GemEntityV2
+	deleteErr    error
+	deletedSlug  string
+	relatedItems []repository.RelatedGemEntityV2
+	relatedErr   error
+	relatedCalls int
+	listCalls    int
+	getErr       error
 }
 
 func newV2RepositoryStub(entity *domain.GemEntityV2) *v2RepositoryStub {
 	return &v2RepositoryStub{entities: map[string]*domain.GemEntityV2{entity.Slug: entity}}
 }
 func (r *v2RepositoryStub) GetV2BySlug(_ context.Context, slug string) (*domain.GemEntityV2, error) {
+	if r.getErr != nil {
+		return nil, r.getErr
+	}
 	entity, ok := r.entities[slug]
 	if !ok {
-		return nil, errV2NotFound{}
+		return nil, sql.ErrNoRows
 	}
 	copy := *entity
 	return &copy, nil
 }
 func (r *v2RepositoryStub) ListV2(_ context.Context) ([]domain.GemEntityV2, error) {
+	r.listCalls++
 	result := make([]domain.GemEntityV2, 0, len(r.entities))
 	for _, entity := range r.entities {
 		result = append(result, *entity)
 	}
 	return result, nil
+}
+func (r *v2RepositoryStub) GetV2Related(_ context.Context, _ string) ([]repository.RelatedGemEntityV2, error) {
+	r.relatedCalls++
+	return r.relatedItems, r.relatedErr
+}
+
+func TestV2RelatedCompactResponse(t *testing.T) {
+	repo := newV2RepositoryStub(&domain.GemEntityV2{Slug: "landscape-jasper"})
+	repo.relatedItems = []repository.RelatedGemEntityV2{
+		{Slug: "red-jasper", Type: domain.TypeRock, NameRU: "Яшма красная", NameEN: "Red Jasper", Direction: "reverse"},
+	}
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodGet, "/api/v2/gem-entities/landscape-jasper/related", nil)
+	context.Params = gin.Params{{Key: "slug", Value: "landscape-jasper"}}
+	NewGemEntityV2Handler(repo).Related(context)
+	if recorder.Code != http.StatusOK || repo.relatedCalls != 1 || repo.listCalls != 0 {
+		t.Fatalf("status=%d related calls=%d list calls=%d: %s", recorder.Code, repo.relatedCalls, repo.listCalls, recorder.Body.String())
+	}
+	var response struct {
+		Data []map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Data) != 1 || response.Data[0]["name_ru"] != "Яшма красная" || response.Data[0]["name_en"] != "Red Jasper" || response.Data[0]["direction"] != "reverse" {
+		t.Fatalf("unexpected related response: %s", recorder.Body.String())
+	}
+	if _, fullCard := response.Data[0]["scientific"]; fullCard {
+		t.Fatalf("full card leaked: %s", recorder.Body.String())
+	}
+}
+
+func TestV2RelatedMissingSourceAndQueryError(t *testing.T) {
+	for _, tt := range []struct {
+		repo         *v2RepositoryStub
+		status       int
+		wantError    string
+		relatedCalls int
+	}{
+		{newV2RepositoryStub(&domain.GemEntityV2{Slug: "other"}), http.StatusNotFound, `"error":"not_found"`, 0},
+		{&v2RepositoryStub{entities: map[string]*domain.GemEntityV2{}, getErr: errors.New("db unavailable")}, http.StatusInternalServerError, `"error":"internal_error"`, 0},
+		{&v2RepositoryStub{entities: map[string]*domain.GemEntityV2{}, getErr: errors.New("index not found")}, http.StatusInternalServerError, `"error":"internal_error"`, 0},
+		{&v2RepositoryStub{entities: map[string]*domain.GemEntityV2{"landscape-jasper": {Slug: "landscape-jasper"}}, relatedErr: errors.New("db unavailable")}, http.StatusInternalServerError, `"error":"internal_error"`, 1},
+	} {
+		recorder := httptest.NewRecorder()
+		context, _ := gin.CreateTestContext(recorder)
+		context.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+		context.Params = gin.Params{{Key: "slug", Value: "landscape-jasper"}}
+		NewGemEntityV2Handler(tt.repo).Related(context)
+		if recorder.Code != tt.status || tt.repo.listCalls != 0 || tt.repo.relatedCalls != tt.relatedCalls || !bytes.Contains(recorder.Body.Bytes(), []byte(tt.wantError)) {
+			t.Fatalf("status=%d related calls=%d list calls=%d body=%s", recorder.Code, tt.repo.relatedCalls, tt.repo.listCalls, recorder.Body.String())
+		}
+	}
+}
+
+func TestV2RelatedEmptyList(t *testing.T) {
+	repo := newV2RepositoryStub(&domain.GemEntityV2{Slug: "unlinked-gem"})
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	context.Params = gin.Params{{Key: "slug", Value: "unlinked-gem"}}
+	NewGemEntityV2Handler(repo).Related(context)
+	if recorder.Code != http.StatusOK || !bytes.Contains(recorder.Body.Bytes(), []byte(`"data":[]`)) {
+		t.Fatalf("empty relations must be an array: %d %s", recorder.Code, recorder.Body.String())
+	}
 }
 func (r *v2RepositoryStub) CreateV2(_ context.Context, entity *domain.GemEntityV2) error {
 	r.entities[entity.Slug] = entity

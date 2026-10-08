@@ -34,10 +34,20 @@ type MineralRepository interface {
 // interface above remains temporarily for handlers and legacy media upload.
 type GemEntityV2Repository interface {
 	GetV2BySlug(ctx context.Context, slug string) (*domain.GemEntityV2, error)
+	GetV2Related(ctx context.Context, slug string) ([]RelatedGemEntityV2, error)
 	ListV2(ctx context.Context) ([]domain.GemEntityV2, error)
 	CreateV2(ctx context.Context, entity *domain.GemEntityV2) error
 	UpdateV2(ctx context.Context, oldSlug string, entity *domain.GemEntityV2) error
 	DeleteV2(ctx context.Context, slug string) error
+}
+
+// RelatedGemEntityV2 is the compact public projection used by relationship links.
+type RelatedGemEntityV2 struct {
+	Slug      string            `json:"slug" db:"slug"`
+	Type      domain.EntityType `json:"type" db:"type"`
+	NameRU    string            `json:"name_ru" db:"name_ru"`
+	NameEN    string            `json:"name_en" db:"name_en"`
+	Direction string            `json:"direction" db:"direction"`
 }
 
 // FilterValues содержит доступные значения для фильтрации

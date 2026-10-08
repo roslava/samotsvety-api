@@ -26,6 +26,15 @@ func getTestDB(t *testing.T) *sqlx.DB {
 	if err != nil {
 		t.Skipf("Skipping integration tests: %v (PostgreSQL not available)", err)
 	}
+	var databaseName string
+	if err := db.Get(&databaseName, "SELECT current_database()"); err != nil {
+		db.Close()
+		t.Fatalf("Cannot verify integration test database name: %v", err)
+	}
+	if databaseName != "samotsvety_test" {
+		db.Close()
+		t.Fatalf("Refusing to run integration tests against database %q: expected samotsvety_test", databaseName)
+	}
 	return db
 }
 

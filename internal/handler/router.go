@@ -79,6 +79,7 @@ func NewRouter(mineralRepo repository.MineralRepository, postRepo repository.Pos
 		{
 			v2.GET("", v2Handler.List)
 			v2.GET("/:slug", v2Handler.Get)
+			v2.GET("/:slug/related", v2Handler.Related)
 
 			admin := v2.Group("")
 			admin.Use(middleware.APIKeyAuth())

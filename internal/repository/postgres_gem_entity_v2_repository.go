@@ -100,11 +100,51 @@ func (r *PostgresMineralRepository) GetV2BySlug(ctx context.Context, slug string
 	query := `SELECT ` + v2MineralColumns + ` FROM minerals WHERE slug = $1`
 	if err := r.db.GetContext(ctx, &row, query, slug); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("mineral not found")
+			return nil, fmt.Errorf("mineral not found: %w", sql.ErrNoRows)
 		}
 		return nil, fmt.Errorf("db error: %w", err)
 	}
 	return row.toGemEntityV2()
+}
+
+// GetV2Related resolves both directions in one query. The reverse branch uses
+// idx_minerals_related_entities; the direct branch uses the slug index.
+func (r *PostgresMineralRepository) GetV2Related(ctx context.Context, slug string) ([]RelatedGemEntityV2, error) {
+	var related []RelatedGemEntityV2
+	const query = `
+		WITH source AS (
+			SELECT related_entities FROM minerals WHERE slug = $1
+		), candidates AS (
+			SELECT target.slug, links.ordinality AS direct_order,
+			       TRUE AS direct, FALSE AS reverse
+			FROM source
+			CROSS JOIN LATERAL unnest(source.related_entities)
+				WITH ORDINALITY AS links(slug, ordinality)
+			JOIN minerals AS target ON target.slug = links.slug
+			WHERE target.slug <> $1
+			UNION ALL
+			SELECT slug, NULL::bigint, FALSE, TRUE
+			FROM minerals
+			WHERE related_entities @> ARRAY[$1]::text[] AND slug <> $1
+		), matches AS (
+			SELECT slug, MIN(direct_order) AS direct_order,
+			       bool_or(direct) AS direct, bool_or(reverse) AS reverse
+			FROM candidates GROUP BY slug
+		)
+		SELECT mineral.slug, mineral.type,
+		       COALESCE(mineral.i18n #>> '{ru,name}', '') AS name_ru,
+		       COALESCE(mineral.i18n #>> '{en,name}', '') AS name_en,
+		       CASE WHEN matches.direct AND matches.reverse THEN 'both'
+		            WHEN matches.direct THEN 'direct' ELSE 'reverse' END AS direction
+		FROM matches JOIN minerals AS mineral ON mineral.slug = matches.slug
+		ORDER BY matches.direct_order NULLS LAST, mineral.slug`
+	if err := r.db.SelectContext(ctx, &related, query, slug); err != nil {
+		return nil, fmt.Errorf("get V2 related query error: %w", err)
+	}
+	if related == nil {
+		related = []RelatedGemEntityV2{}
+	}
+	return related, nil
 }
 
 func (r *PostgresMineralRepository) ListV2(ctx context.Context) ([]domain.GemEntityV2, error) {

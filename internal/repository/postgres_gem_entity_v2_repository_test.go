@@ -103,6 +103,56 @@ func TestGemEntityV2RowRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPostgresGemEntityV2Related(t *testing.T) {
+	db := getTestDB(t)
+	defer db.Close()
+	defer cleanupTestData(t, db)
+	var columns int
+	if err := db.Get(&columns, `SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'minerals' AND column_name = 'related_entities'`); err != nil || columns != 1 {
+		t.Skip("V2 persistence migration is not applied to the test database")
+	}
+	repo := NewPostgresMineralRepository(db)
+	makeEntity := func(slug, ru, en string, related ...string) *domain.GemEntityV2 {
+		entity := kambabaV2Fixture()
+		entity.Slug = slug
+		entity.I18n.Ru.Name = ru
+		entity.I18n.En.Name = en
+		entity.RelatedEntities = related
+		return entity
+	}
+	entities := []*domain.GemEntityV2{
+		makeEntity("red-jasper", "Яшма красная", "Red Jasper", "landscape-jasper", "missing-jasper", "brecciated-jasper"),
+		makeEntity("landscape-jasper", "Яшма пейзажная", "Landscape Jasper", "red-jasper"),
+		makeEntity("brecciated-jasper", "Яшма брекчиевая", "Brecciated Jasper", "red-jasper"),
+		makeEntity("zebra-jasper", "Яшма зебра", "Zebra Jasper", "red-jasper"),
+	}
+	for _, entity := range entities {
+		if err := repo.CreateV2(context.Background(), entity); err != nil {
+			t.Fatalf("create %s: %v", entity.Slug, err)
+		}
+	}
+	got, err := repo.GetV2Related(context.Background(), "red-jasper")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 || got[0].Slug != "landscape-jasper" || got[0].Direction != "both" ||
+		got[1].Slug != "brecciated-jasper" || got[1].Direction != "both" ||
+		got[2].Slug != "zebra-jasper" || got[2].Direction != "reverse" {
+		t.Fatalf("unexpected direct/reverse order and deduplication: %#v", got)
+	}
+	if got[0].NameRU != "Яшма пейзажная" || got[0].NameEN != "Landscape Jasper" || got[0].Type != domain.TypeRock {
+		t.Fatalf("compact localized projection lost data: %#v", got[0])
+	}
+	got, err = repo.GetV2Related(context.Background(), "landscape-jasper")
+	if err != nil || len(got) != 1 || got[0].Slug != "red-jasper" || got[0].Direction != "both" {
+		t.Fatalf("incoming link missing: %#v, %v", got, err)
+	}
+	got, err = repo.GetV2Related(context.Background(), "zebra-jasper")
+	if err != nil || len(got) != 1 || got[0].Slug != "red-jasper" || got[0].Direction != "direct" {
+		t.Fatalf("direct link missing: %#v, %v", got, err)
+	}
+}
+
 func coordinateFloat64Ptr(value float64) *float64 { return &value }
 
 func TestGemEntityV2AbsentRangesAndEmptyCollectionsRoundTrip(t *testing.T) {
