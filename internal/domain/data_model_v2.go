@@ -41,6 +41,9 @@ type ScientificV2 struct {
 	MineralClass      MineralClass     `json:"mineral_class,omitempty"`
 	SilicateSubclass  SilicateSubclass `json:"silicate_subclass,omitempty"`
 	MineralFamily     MineralFamily    `json:"mineral_family,omitempty"`
+	MineralGroup      MineralGroup     `json:"mineral_group,omitempty"`
+	ChemicalClass     MineralClass     `json:"chemical_class,omitempty"`
+	CatalogFamily     CatalogFamily    `json:"catalog_family,omitempty"`
 	CrystalSystem     CrystalSystem    `json:"crystal_system,omitempty"`
 	CrystalHabit      []CrystalHabit   `json:"crystal_habit,omitempty"`
 	Streak            Streak           `json:"streak,omitempty"`
@@ -303,6 +306,9 @@ func (s ScientificV2) validate() error {
 		validateEnum("scientific.mineral_class", s.MineralClass, MineralClassNativeElements, MineralClassSulfidesSulfosalts, MineralClassHalides, MineralClassOxidesHydroxides, MineralClassCarbonatesNitrates, MineralClassBorates, MineralClassSulfatesChromatesMolybdatesTungstates, MineralClassPhosphatesArsenatesVanadates, MineralClassSilicates, MineralClassOrganic),
 		validateEnum("scientific.silicate_subclass", s.SilicateSubclass, SilicateSubclassNesosilicates, SilicateSubclassSorosilicates, SilicateSubclassCyclosilicates, SilicateSubclassInosilicates, SilicateSubclassPhyllosilicates, SilicateSubclassTectosilicates),
 		validateEnum("scientific.mineral_family", s.MineralFamily, MineralFamilyGarnetGroup, MineralFamilyFeldsparGroup, MineralFamilyQuartzGroup, MineralFamilyTourmalineGroup, MineralFamilyMicaGroup, MineralFamilyPyroxeneGroup, MineralFamilyAmphiboleGroup, MineralFamilyZeoliteGroup, MineralFamilyBerylGroup, MineralFamilySpinelGroup, MineralFamilyCorundumGroup, MineralFamilyCalciteGroup),
+		validateClassification("scientific.mineral_group", string(s.MineralGroup), MineralGroupValues),
+		validateClassification("scientific.chemical_class", string(s.ChemicalClass), ChemicalClassValues),
+		validateClassification("scientific.catalog_family", string(s.CatalogFamily), CatalogFamilyValues),
 		validateEnum("scientific.crystal_system", s.CrystalSystem, CrystalSystemMonoclinic, CrystalSystemOrthorhombic, CrystalSystemHexagonal, CrystalSystemTrigonal, CrystalSystemIsometric, CrystalSystemTriclinic, CrystalSystemTetragonal, CrystalSystemAmorphous),
 		validateEnum("scientific.streak", s.Streak, StreakBlack, StreakWhiteOrColourless, StreakGrey, StreakGreen, StreakBlue, StreakBrown, StreakPinkToRed, StreakYellowToOrange),
 		validateEnum("scientific.transparency", s.Transparency, TransparencyTransparent, TransparencyTranslucent, TransparencyOpaque),

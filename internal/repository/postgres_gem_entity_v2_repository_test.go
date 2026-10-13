@@ -72,6 +72,7 @@ func TestGemEntityV2RowRoundTrip(t *testing.T) {
 	entity.Scientific.SpecificGravity = &domain.NumericRange{Min: 2.6, Max: 2.8}
 	entity.Scientific.BaseColor = domain.BaseColorGreen
 	entity.Scientific.CrystalSystem = domain.CrystalSystemTrigonal
+	entity.Scientific.CatalogFamily = domain.CatalogFamily("jaspers")
 	entity.Localities = []domain.LocalityV2{
 		{CountryCode: "MG", CountryEn: "Madagascar", Latitude: coordinateFloat64Ptr(-16.4), Longitude: coordinateFloat64Ptr(46.5), CoordinatePrecision: domain.CoordinatePrecisionApproximate},
 		{CountryCode: "RU", CountryRu: "Россия"},
@@ -100,6 +101,22 @@ func TestGemEntityV2RowRoundTrip(t *testing.T) {
 	}
 	if len(got.Images.Gallery) != 3 || got.Images.Gallery[1].Caption.En != "EN caption" {
 		t.Fatalf("gallery/caption lost: %#v", got.Images.Gallery)
+	}
+}
+
+func TestGemEntityV2ClassificationJSONBRoundTrip(t *testing.T) {
+	entity := kambabaV2Fixture()
+	entity.Slug = "sapphire"
+	entity.Type = domain.TypeGemVariety
+	entity.Scientific.MineralGroup = "corundum_group"
+	entity.Scientific.ChemicalClass = domain.MineralClassOxidesHydroxides
+	entity.Scientific.CatalogFamily = ""
+	got, err := rowFromV2Entity(t, entity).toGemEntityV2()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Scientific.MineralGroup != entity.Scientific.MineralGroup || got.Scientific.ChemicalClass != entity.Scientific.ChemicalClass || got.Scientific.CatalogFamily != entity.Scientific.CatalogFamily {
+		t.Fatalf("classification lost in JSONB: %#v", got.Scientific)
 	}
 }
 

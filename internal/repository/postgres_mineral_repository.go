@@ -96,9 +96,8 @@ func (r *PostgresMineralRepository) List(ctx context.Context, filters domain.Fil
 	}
 
 	if filters.MineralGroup != "" {
-		// mineral_group переехал в scientific.mineral_family — языконезависимый
-		// enum (коллекционная группа), точное равенство, без ILIKE по двум языкам.
-		conditions = append(conditions, fmt.Sprintf("scientific->>'mineral_family' = $%d", argIdx))
+		// Match canonical codes and retained historical group codes.
+		conditions = append(conditions, fmt.Sprintf("(scientific->>'mineral_group' = $%d OR scientific->>'mineral_family' = $%d)", argIdx, argIdx))
 		args = append(args, filters.MineralGroup)
 		argIdx++
 	}
@@ -419,12 +418,12 @@ func (r *PostgresMineralRepository) GetFilters(ctx context.Context, lang string)
 	}
 	fv.BaseColors = baseColors
 
-	// Mineral family is a language-neutral V2 enum.
+	// Include reviewed classification and retained legacy values.
 	var groups []string
 	if err := r.db.SelectContext(ctx, &groups, `
-			SELECT DISTINCT scientific->>'mineral_family'
-			FROM minerals
-			WHERE scientific->>'mineral_family' IS NOT NULL AND scientific->>'mineral_family' != ''
+			SELECT DISTINCT value FROM minerals,
+			LATERAL (VALUES (scientific->>'mineral_group'), (scientific->>'mineral_family')) groups(value)
+			WHERE value IS NOT NULL AND value != ''
 		ORDER BY 1
 	`); err != nil {
 		return nil, fmt.Errorf("failed to get mineral_groups: %w", err)
