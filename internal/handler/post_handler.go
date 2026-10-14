@@ -1,9 +1,12 @@
-// internal/handler/post_handler.go
 package handler
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -15,287 +18,305 @@ import (
 )
 
 type PostHandler struct {
-	repo repository.PostRepository
+	repo          repository.PostRepository
+	mediaVerifier SlideMediaVerifier
 }
 
-func NewPostHandler(repo repository.PostRepository) *PostHandler {
-	return &PostHandler{repo: repo}
+// A missing verifier fails closed when a supplied image must be checked.
+func NewPostHandler(repo repository.PostRepository, verifier ...SlideMediaVerifier) *PostHandler {
+	h := &PostHandler{repo: repo}
+	if len(verifier) > 0 {
+		h.mediaVerifier = verifier[0]
+	}
+	return h
 }
 
-// ListPosts godoc
-// @Summary      Получить список статей
-// @Description  Список постов с фильтрацией и пагинацией
-// @Tags         posts
-// @Produce      json
-// @Param        page       query  int     false  "Страница"
-// @Param        limit      query  int     false  "Лимит"
-// @Param        type       query  string  false  "Тип (blog, guide...)"
-// @Param        tag        query  string  false  "Тег"
-// @Param        gem_slug   query  string  false  "Связанный камень"
-// @Param        published  query  bool    false  "Только опубликованные"
-// @Success      200  {object}  gin.H
-// @Router       /api/v1/posts [get]
+func (h *PostHandler) adminRead(c *gin.Context) (bool, bool) {
+	key := c.GetHeader("X-API-Key")
+	if key == "" {
+		return false, true
+	}
+	expected := os.Getenv("ADMIN_API_KEY")
+	if expected == "" || key != expected {
+		NewErrorResponse(c, http.StatusUnauthorized, "unauthorized", "Invalid API key")
+		return false, false
+	}
+	return true, true
+}
+
+func respondPostError(c *gin.Context, err error) {
+	var validation *PostValidationError
+	switch {
+	case errors.As(err, &validation):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "validation_error", "message": validation.Error(), "fields": validation.Fields, "code": 400})
+	case errors.Is(err, repository.ErrPostNotFound):
+		NewErrorResponse(c, http.StatusNotFound, "not_found", "Article not found")
+	case errors.Is(err, repository.ErrUnsupportedArticleFormat):
+		NewErrorResponse(c, http.StatusConflict, "unsupported_article_format", "Article is not V2")
+	case errors.Is(err, repository.ErrPostPrecondition):
+		NewErrorResponse(c, http.StatusPreconditionFailed, "precondition_failed", "ETag is stale")
+	case errors.Is(err, repository.ErrPostSlugConflict):
+		NewErrorResponse(c, http.StatusConflict, "slug_already_exists", "Article slug already exists")
+	case errors.Is(err, ErrMediaVerificationUnavailable):
+		NewErrorResponse(c, http.StatusServiceUnavailable, "media_verification_unavailable", err.Error())
+	default:
+		slog.Error("Article operation failed", "error", err)
+		RespondInternalError(c, "Article operation failed")
+	}
+}
+
+func etag(revision string) string { return `"` + revision + `"` }
+func requiredRevision(c *gin.Context) (string, bool) {
+	value := strings.TrimSpace(c.GetHeader("If-Match"))
+	if value == "" {
+		NewErrorResponse(c, http.StatusPreconditionRequired, "precondition_required", "If-Match is required")
+		return "", false
+	}
+	if len(value) < 3 || value[0] != '"' || value[len(value)-1] != '"' || strings.HasPrefix(value, "W/") {
+		NewErrorResponse(c, http.StatusPreconditionFailed, "precondition_failed", "ETag is stale")
+		return "", false
+	}
+	return value[1 : len(value)-1], true
+}
+
+func decodePostPayload(c *gin.Context) (postJSONObject, bool) {
+	var payload postJSONObject
+	if err := c.ShouldBindJSON(&payload); err != nil || payload == nil {
+		respondPostError(c, fieldError("body", "JSON object is required"))
+		return nil, false
+	}
+	if err := checkNewPostPayloadFields(payload); err != nil {
+		respondPostError(c, err)
+		return nil, false
+	}
+	return payload, true
+}
+
+func checkNewPostPayloadFields(payload postJSONObject) error {
+	for _, field := range []string{"id", "published_at", "updated_at", "cover_image", "content_blocks"} {
+		if _, ok := payload[field]; ok {
+			return fieldError(field, "field is not writable in Article V2")
+		}
+	}
+	return nil
+}
+
+func applyPostFields(post *domain.Post, payload postJSONObject, create bool) error {
+	for field, raw := range payload {
+		switch field {
+		case "slug":
+			value, err := stringValue(raw, "slug")
+			if err != nil {
+				return err
+			}
+			post.Slug = value
+		case "type":
+			value, err := stringValue(raw, "type")
+			if err != nil {
+				return err
+			}
+			post.Type = domain.PostType(value)
+		case "i18n":
+			var err error
+			if create {
+				post.I18n, err = prepareNewI18n(raw)
+			} else {
+				post.I18n, err = mergePostI18n(post.I18n, raw)
+			}
+			if err != nil {
+				return err
+			}
+		case "gem_slugs":
+			value, err := stringArrayValue(raw, "gem_slugs")
+			if err != nil {
+				return err
+			}
+			post.GemSlugs = value
+		case "tags":
+			value, err := stringArrayValue(raw, "tags")
+			if err != nil {
+				return err
+			}
+			post.Tags = value
+		case "author":
+			value, err := stringValue(raw, "author")
+			if err != nil {
+				return err
+			}
+			post.Author = value
+		case "is_published":
+			value, err := boolValue(raw, "is_published")
+			if err != nil {
+				return err
+			}
+			post.IsPublished = value
+		default:
+			return fieldError(field, "unknown or unwritable field")
+		}
+	}
+	return nil
+}
+
+type ListPostsRequest struct {
+	Page      int    `form:"page"`
+	Limit     int    `form:"limit"`
+	Type      string `form:"type"`
+	Tag       string `form:"tag"`
+	GemSlug   string `form:"gem_slug"`
+	Published bool   `form:"published"`
+	Lang      string `form:"lang"`
+}
+
 func (h *PostHandler) ListPosts(c *gin.Context) {
+	admin, ok := h.adminRead(c)
+	if !ok {
+		return
+	}
 	var req ListPostsRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		RespondValidationError(c, err)
 		return
 	}
-
-	filters := repository.PostFilterParams{
-		Page:        req.Page,
-		Limit:       req.Limit,
-		Type:        req.Type,
-		Tag:         req.Tag,
-		GemSlug:     req.GemSlug,
-		IsPublished: req.Published,
-		Lang:        c.DefaultQuery("lang", "ru"),
+	if req.Page < 0 || req.Limit < 0 || req.Limit > 100 {
+		respondPostError(c, fieldError("pagination", "invalid page or limit"))
+		return
 	}
-
+	if req.Page == 0 {
+		req.Page = 1
+	}
+	if req.Limit == 0 {
+		req.Limit = 20
+	}
+	filters := repository.PostFilterParams{
+		Page: req.Page, Limit: req.Limit, Type: req.Type, Tag: req.Tag,
+		GemSlug: req.GemSlug, IsPublished: req.Published,
+		IncludeDrafts: admin && !req.Published, Lang: req.Lang,
+	}
 	posts, total, err := h.repo.List(c.Request.Context(), filters)
 	if err != nil {
-		slog.Error("Failed to list posts", "error", err)
-		RespondInternalError(c, "Failed to fetch posts")
+		respondPostError(c, err)
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"data":  posts,
-		"total": total,
-		"page":  filters.Page,
-		"limit": filters.Limit,
-	})
+	c.JSON(http.StatusOK, gin.H{"data": posts, "total": total, "page": req.Page, "limit": req.Limit})
 }
 
-// GetPost godoc
-// @Summary      Получить статью по slug
-// @Tags         posts
-// @Produce      json
-// @Param        slug  path   string  true  "Slug статьи"
-// @Param        lang  query  string  false "Язык"
-// @Success      200  {object}  domain.Post
-// @Router       /api/v1/posts/{slug} [get]
 func (h *PostHandler) GetPost(c *gin.Context) {
-	slug := c.Param("slug")
-	lang := c.DefaultQuery("lang", "ru")
-
-	post, err := h.repo.GetBySlug(c.Request.Context(), slug, lang)
-	if err != nil {
-		RespondNotFound(c, "Post not found")
+	admin, ok := h.adminRead(c)
+	if !ok {
 		return
 	}
-
+	post, err := h.repo.GetBySlug(c.Request.Context(), c.Param("slug"), admin)
+	if err != nil {
+		respondPostError(c, err)
+		return
+	}
+	c.Header("ETag", etag(post.Revision))
 	c.JSON(http.StatusOK, post)
 }
 
-// CreatePost godoc
-// @Summary      Создать новую статью
-// @Description  Создаёт новую статью (только админ)
-// @Tags         posts
-// @Accept       json
-// @Produce      json
-// @Param        post body handler.CreatePostRequest true "Данные статьи"
-// @Success      201  {object}  domain.Post
-// @Failure      400  {object}  handler.ErrorResponse
-// @Failure      409  {object}  handler.ErrorResponse "Slug уже существует"
-// @Router       /api/v1/posts [post]
+// CreatePostRequest and UpdatePostRequest document the envelope; nested i18n is
+// intentionally raw to preserve keys unknown to this version of the service.
+type CreatePostRequest struct {
+	Slug        string          `json:"slug"`
+	Type        domain.PostType `json:"type,omitempty"`
+	I18n        json.RawMessage `json:"i18n"`
+	GemSlugs    []string        `json:"gem_slugs,omitempty"`
+	Tags        []string        `json:"tags,omitempty"`
+	IsPublished bool            `json:"is_published"`
+	Author      string          `json:"author,omitempty"`
+}
+type UpdatePostRequest = CreatePostRequest
+
 func (h *PostHandler) CreatePost(c *gin.Context) {
-	var req CreatePostRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondValidationError(c, err)
+	payload, ok := decodePostPayload(c)
+	if !ok {
 		return
 	}
-
-	now := time.Now().UTC()
-
-	post := &domain.Post{
-		Slug:          req.Slug,
-		Type:          req.Type,
-		I18n:          req.I18n,
-		CoverImage:    req.CoverImage,
-		ContentBlocks: req.ContentBlocks,
-		GemSlugs:      req.GemSlugs,
-		Tags:          req.Tags,
-		PublishedAt:   req.PublishedAt,
-		UpdatedAt:     now,
-		IsPublished:   req.IsPublished,
-		Author:        req.Author,
+	post, err := prepareNewPost(c.Request.Context(), payload, h.mediaVerifier)
+	if err != nil {
+		respondPostError(c, err)
+		return
 	}
-
 	if err := h.repo.Create(c.Request.Context(), post); err != nil {
-		if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate") {
-			RespondWithError(c, http.StatusConflict, "Статья с таким slug уже существует")
-			return
-		}
-		slog.Error("Failed to create post", "error", err, "slug", req.Slug)
-		RespondInternalError(c, "Не удалось создать статью")
+		respondPostError(c, err)
 		return
 	}
-
+	c.Header("ETag", etag(post.Revision))
 	c.JSON(http.StatusCreated, post)
 }
 
-type ListPostsRequest struct {
-	Page      int    `form:"page" validate:"min=1"`
-	Limit     int    `form:"limit" validate:"min=1,max=100"`
-	Type      string `form:"type"`
-	Tag       string `form:"tag"`
-	GemSlug   string `form:"gem_slug"`
-	Published bool   `form:"published"`
+func prepareNewPost(ctx context.Context, payload postJSONObject, verifier SlideMediaVerifier) (*domain.Post, error) {
+	post := &domain.Post{Type: domain.PostTypeGuide, GemSlugs: []string{}, Tags: []string{}}
+	if err := applyPostFields(post, payload, true); err != nil {
+		return nil, err
+	}
+	if len(post.I18n) == 0 {
+		return nil, fieldError("i18n", "object is required")
+	}
+	if post.IsPublished {
+		now := time.Now().UTC()
+		post.PublishedAt = &now
+	}
+	if err := validateArticle(ctx, post, verifier); err != nil {
+		return nil, err
+	}
+	return post, nil
 }
 
-// CreatePostRequest — DTO для создания статьи
-type CreatePostRequest struct {
-	Slug          string                `json:"slug" validate:"required"`
-	Type          domain.PostType       `json:"type" validate:"required"`
-	I18n          domain.PostI18n       `json:"i18n" validate:"required"`
-	CoverImage    string                `json:"cover_image"`
-	ContentBlocks []domain.ContentBlock `json:"content_blocks"`
-	GemSlugs      []string              `json:"gem_slugs"`
-	Tags          []string              `json:"tags"`
-	PublishedAt   *time.Time            `json:"published_at"`
-	IsPublished   bool                  `json:"is_published"`
-	Author        string                `json:"author"`
-}
-
-// UpdatePost godoc
-// @Summary      Обновить статью
-// @Tags         posts
-// @Accept       json
-// @Produce      json
-// @Param        slug  path    string  true  "Slug статьи"
-// @Param        post body handler.UpdatePostRequest true "Данные для обновления"
-// @Success      200  {object}  domain.Post
-// @Failure      400  {object}  handler.ErrorResponse
-// @Failure      404  {object}  handler.ErrorResponse
-// @Router       /api/v1/posts/{slug} [put]
 func (h *PostHandler) UpdatePost(c *gin.Context) {
-	slug := c.Param("slug")
-
-	var req UpdatePostRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondValidationError(c, err)
+	revision, ok := requiredRevision(c)
+	if !ok {
 		return
 	}
-
-	// Получаем текущую статью
-	post, err := h.repo.GetBySlug(c.Request.Context(), slug, "ru")
+	payload, ok := decodePostPayload(c)
+	if !ok {
+		return
+	}
+	post, err := h.repo.Update(c.Request.Context(), c.Param("slug"), revision, func(post *domain.Post) error {
+		if err := applyPostFields(post, payload, false); err != nil {
+			return err
+		}
+		if post.IsPublished && post.PublishedAt == nil {
+			now := time.Now().UTC()
+			post.PublishedAt = &now
+		}
+		return validateArticle(c.Request.Context(), post, h.mediaVerifier)
+	})
 	if err != nil {
-		RespondNotFound(c, "Статья не найдена")
+		respondPostError(c, err)
 		return
 	}
-
-	// Обновляем поля, если переданы
-	if req.Slug != nil && *req.Slug != "" {
-		post.Slug = *req.Slug
-	}
-	if req.Type != nil {
-		post.Type = *req.Type
-	}
-	if req.I18n != nil {
-		post.I18n = *req.I18n
-	}
-	if req.CoverImage != nil {
-		post.CoverImage = *req.CoverImage
-	}
-	if req.ContentBlocks != nil {
-		post.ContentBlocks = *req.ContentBlocks
-	}
-	if req.GemSlugs != nil {
-		post.GemSlugs = *req.GemSlugs
-	}
-	if req.Tags != nil {
-		post.Tags = *req.Tags
-	}
-	if req.PublishedAt != nil {
-		post.PublishedAt = req.PublishedAt
-	}
-	if req.IsPublished != nil {
-		post.IsPublished = *req.IsPublished
-	}
-	if req.Author != nil {
-		post.Author = *req.Author
-	}
-
-	post.UpdatedAt = time.Now().UTC()
-
-	if err := h.repo.Update(c.Request.Context(), slug, post); err != nil {
-		slog.Error("Failed to update post", "error", err, "slug", slug)
-		RespondInternalError(c, "Не удалось обновить статью")
-		return
-	}
-
+	c.Header("ETag", etag(post.Revision))
 	c.JSON(http.StatusOK, post)
 }
 
-// DeletePost godoc
-// @Summary      Удалить статью
-// @Tags         posts
-// @Produce      json
-// @Param        slug  path  string  true  "Slug статьи"
-// @Success      204
-// @Failure      404  {object}  handler.ErrorResponse
-// @Router       /api/v1/posts/{slug} [delete]
 func (h *PostHandler) DeletePost(c *gin.Context) {
-	slug := c.Param("slug")
-
-	if err := h.repo.Delete(c.Request.Context(), slug); err != nil {
-		if err.Error() == "post not found" {
-			RespondNotFound(c, "Статья не найдена")
-			return
-		}
-		slog.Error("Failed to delete post", "error", err, "slug", slug)
-		RespondInternalError(c, "Не удалось удалить статью")
+	revision, ok := requiredRevision(c)
+	if !ok {
 		return
 	}
-
+	if err := h.repo.Delete(c.Request.Context(), c.Param("slug"), revision); err != nil {
+		respondPostError(c, err)
+		return
+	}
 	c.Status(http.StatusNoContent)
 }
 
-// UpdatePostRequest — DTO для обновления статьи (все поля опциональны)
-type UpdatePostRequest struct {
-	Slug          *string                `json:"slug"`
-	Type          *domain.PostType       `json:"type"`
-	I18n          *domain.PostI18n       `json:"i18n"`
-	CoverImage    *string                `json:"cover_image"`
-	ContentBlocks *[]domain.ContentBlock `json:"content_blocks"`
-	GemSlugs      *[]string              `json:"gem_slugs"`
-	Tags          *[]string              `json:"tags"`
-	PublishedAt   *time.Time             `json:"published_at"`
-	IsPublished   *bool                  `json:"is_published"`
-	Author        *string                `json:"author"`
-}
-
-// SearchPosts godoc
-// @Summary      Поиск по статьям
-// @Description  Полнотекстовый поиск
-// @Tags         search
-// @Produce      json
-// @Param        q      query  string  true  "Поисковый запрос"
-// @Param        lang   query  string  false "Язык"
-// @Param        limit  query  int     false "Лимит"
-// @Success      200  {object}  gin.H
-// @Router       /api/v1/search/posts [get]
 func (h *PostHandler) SearchPosts(c *gin.Context) {
 	q := c.Query("q")
-	lang := c.DefaultQuery("lang", "ru")
-	limitStr := c.DefaultQuery("limit", "20")
-
-	limit, _ := strconv.Atoi(limitStr)
-	if limit == 0 || limit > 100 {
-		limit = 20
+	limit := 20
+	if raw := c.Query("limit"); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 1 || value > 100 {
+			respondPostError(c, fieldError("limit", "must be between 1 and 100"))
+			return
+		}
+		limit = value
 	}
-
-	results, total, err := h.repo.Search(c.Request.Context(), q, lang, limit, 0)
+	posts, total, err := h.repo.Search(c.Request.Context(), q, c.DefaultQuery("lang", "ru"), limit, 0)
 	if err != nil {
-		slog.Error("Search posts failed", "error", err)
-		RespondInternalError(c, "Search error")
+		respondPostError(c, err)
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"data":  results,
-		"total": total,
-		"limit": limit,
-	})
+	c.JSON(http.StatusOK, gin.H{"data": posts, "total": total, "limit": limit})
 }

@@ -18,7 +18,11 @@ func NewRouter(mineralRepo repository.MineralRepository, postRepo repository.Pos
 
 	mineralHandler := NewMineralHandler(mineralRepo)
 	v2Repo, hasV2Repo := mineralRepo.(repository.GemEntityV2Repository)
-	postHandler := NewPostHandler(postRepo)
+	var articleVerifier SlideMediaVerifier
+	if articleStorage, ok := mediaStorage.(storage.ArticleMediaStorage); ok {
+		articleVerifier = NewArticleMediaVerifier(articleStorage)
+	}
+	postHandler := NewPostHandler(postRepo, articleVerifier)
 	mediaHandler := NewMediaHandler(mediaStorage)
 
 	// API v1

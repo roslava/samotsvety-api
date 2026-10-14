@@ -1,10 +1,12 @@
-// internal/repository/postgres_post_repository.go
 package repository
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -15,306 +17,293 @@ import (
 	"github.com/roslava/samotsvety-api/internal/domain"
 )
 
-type PostgresPostRepository struct {
-	db *sqlx.DB
-}
+const postSelect = `id, slug, type, i18n, gem_slugs, tags,
+  published_at, updated_at, is_published, COALESCE(author, '') AS author`
+const postV2Condition = `i18n #>> '{media,schema_version}' = '2'`
+
+type PostgresPostRepository struct{ db *sqlx.DB }
 
 func NewPostgresPostRepository(db *sqlx.DB) *PostgresPostRepository {
 	return &PostgresPostRepository{db: db}
 }
 
-func (r *PostgresPostRepository) GetBySlug(ctx context.Context, slug, lang string) (*domain.Post, error) {
-	var p postRow
-	query := `SELECT id, slug, type, i18n, cover_image, content_blocks, gem_slugs, tags,
-	                 published_at, updated_at, is_published, author
-	          FROM posts WHERE slug = $1`
-
-	err := r.db.GetContext(ctx, &p, query, slug)
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("post not found")
-	}
-	if err != nil {
-		return nil, fmt.Errorf("db error: %w", err)
-	}
-
-	// lang сохраняется в сигнатуре для обратной совместимости и на будущее (например,
-	// сортировка по локализованному заголовку), но сам ответ содержит оба языка —
-	// выбор нужного языка отдаётся на откуп фронтенду, как и у GemEntity.
-	return p.toPost(), nil
-}
-
-func (r *PostgresPostRepository) List(ctx context.Context, filters PostFilterParams) ([]domain.Post, int, error) {
-	if filters.Limit == 0 {
-		filters.Limit = 20
-	}
-	if filters.Page == 0 {
-		filters.Page = 1
-	}
-	if filters.Order == "" {
-		filters.Order = "desc"
-	}
-
-	offset := (filters.Page - 1) * filters.Limit
-
-	var conditions []string
-	var args []interface{}
-	argIdx := 1
-
-	if filters.IsPublished {
-		conditions = append(conditions, "is_published = true")
-	}
-
-	if filters.Type != "" {
-		conditions = append(conditions, fmt.Sprintf("type = $%d", argIdx))
-		args = append(args, filters.Type)
-		argIdx++
-	}
-
-	if filters.GemSlug != "" {
-		conditions = append(conditions, fmt.Sprintf("$%d = ANY(gem_slugs)", argIdx))
-		args = append(args, filters.GemSlug)
-		argIdx++
-	}
-
-	if filters.Tag != "" {
-		conditions = append(conditions, fmt.Sprintf("$%d = ANY(tags)", argIdx))
-		args = append(args, filters.Tag)
-		argIdx++
-	}
-
-	whereClause := ""
-	if len(conditions) > 0 {
-		whereClause = "WHERE " + strings.Join(conditions, " AND ")
-	}
-
-	sortField := "published_at"
-	order := "DESC"
-	if strings.ToLower(filters.Order) == "asc" {
-		order = "ASC"
-	}
-
-	query := fmt.Sprintf(`
-		SELECT id, slug, type, i18n, cover_image, content_blocks, gem_slugs, tags,
-		       published_at, updated_at, is_published, author
-		FROM posts
-		%s
-		ORDER BY %s %s
-		LIMIT $%d OFFSET $%d
-	`, whereClause, sortField, order, argIdx, argIdx+1)
-
-	args = append(args, filters.Limit, offset)
-
-	var rows []postRow
-	if err := r.db.SelectContext(ctx, &rows, query, args...); err != nil {
-		return nil, 0, fmt.Errorf("list query error: %w", err)
-	}
-
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM posts %s", whereClause)
-	var total int
-	countArgs := args[:len(args)-2]
-	if err := r.db.GetContext(ctx, &total, countQuery, countArgs...); err != nil {
-		return nil, 0, fmt.Errorf("count query error: %w", err)
-	}
-
-	var results []domain.Post
-	for _, row := range rows {
-		results = append(results, *row.toPost())
-	}
-
-	return results, total, nil
-}
-
-func (r *PostgresPostRepository) Search(ctx context.Context, query, lang string, limit, offset int) ([]domain.Post, int, error) {
-	if query == "" {
-		return []domain.Post{}, 0, nil
-	}
-
-	searchQuery := query + ":*"
-
-	querySQL := `
-		SELECT id, slug, type, i18n, cover_image, content_blocks, gem_slugs, tags,
-		       published_at, updated_at, is_published, author
-		FROM posts
-		WHERE is_published = true
-		  AND (
-		    to_tsvector('russian', COALESCE(i18n->'ru'->>'title', '') || ' ' || COALESCE(i18n->'ru'->>'content', '')) @@ to_tsquery('russian', $1) OR
-		    to_tsvector('english', COALESCE(i18n->'en'->>'title', '') || ' ' || COALESCE(i18n->'en'->>'content', '')) @@ to_tsquery('english', $1)
-		  )
-		ORDER BY published_at DESC
-		LIMIT $2 OFFSET $3
-	`
-
-	var rows []postRow
-	if err := r.db.SelectContext(ctx, &rows, querySQL, searchQuery, limit, offset); err != nil {
-		return nil, 0, fmt.Errorf("search query error: %w", err)
-	}
-
-	countSQL := `
-		SELECT COUNT(*) FROM posts
-		WHERE is_published = true
-		  AND (
-		    to_tsvector('russian', COALESCE(i18n->'ru'->>'title', '') || ' ' || COALESCE(i18n->'ru'->>'content', '')) @@ to_tsquery('russian', $1) OR
-		    to_tsvector('english', COALESCE(i18n->'en'->>'title', '') || ' ' || COALESCE(i18n->'en'->>'content', '')) @@ to_tsquery('english', $1)
-		  )
-	`
-	var total int
-	r.db.GetContext(ctx, &total, countSQL, searchQuery)
-
-	var results []domain.Post
-	for _, row := range rows {
-		results = append(results, *row.toPost())
-	}
-
-	return results, total, nil
-}
-
 type postRow struct {
-	ID            string         `db:"id"`
-	Slug          string         `db:"slug"`
-	Type          string         `db:"type"`
-	I18n          []byte         `db:"i18n"`
-	CoverImage    string         `db:"cover_image"`
-	ContentBlocks []byte         `db:"content_blocks"`
-	GemSlugs      pq.StringArray `db:"gem_slugs"`
-	Tags          pq.StringArray `db:"tags"`
-	PublishedAt   *time.Time     `db:"published_at"`
-	UpdatedAt     time.Time      `db:"updated_at"`
-	IsPublished   bool           `db:"is_published"`
-	Author        string         `db:"author"`
+	ID          string         `db:"id"`
+	Slug        string         `db:"slug"`
+	Type        string         `db:"type"`
+	I18n        []byte         `db:"i18n"`
+	GemSlugs    pq.StringArray `db:"gem_slugs"`
+	Tags        pq.StringArray `db:"tags"`
+	PublishedAt *time.Time     `db:"published_at"`
+	UpdatedAt   time.Time      `db:"updated_at"`
+	IsPublished bool           `db:"is_published"`
+	Author      string         `db:"author"`
 }
 
 func (row postRow) toPost() *domain.Post {
-	var i18n domain.PostI18n
-	json.Unmarshal(row.I18n, &i18n)
-
-	var blocks []domain.ContentBlock
-	json.Unmarshal(row.ContentBlocks, &blocks)
-
-	return &domain.Post{
-		ID:            row.ID,
-		Slug:          row.Slug,
-		Type:          domain.PostType(row.Type),
-		I18n:          i18n,
-		CoverImage:    row.CoverImage,
-		ContentBlocks: blocks,
-		GemSlugs:      row.GemSlugs,
-		Tags:          row.Tags,
-		PublishedAt:   row.PublishedAt,
-		UpdatedAt:     row.UpdatedAt,
-		IsPublished:   row.IsPublished,
-		Author:        row.Author,
+	post := &domain.Post{
+		ID: row.ID, Slug: row.Slug, Type: domain.PostType(row.Type),
+		I18n:     append(json.RawMessage(nil), row.I18n...),
+		GemSlugs: []string(row.GemSlugs), Tags: []string(row.Tags),
+		PublishedAt: row.PublishedAt, UpdatedAt: row.UpdatedAt,
+		IsPublished: row.IsPublished, Author: row.Author,
 	}
+	post.Revision = revisionFromI18n(post.I18n)
+	return post
+}
+
+func revisionFromI18n(raw json.RawMessage) string {
+	var value struct {
+		Media struct {
+			Revision string `json:"revision"`
+		} `json:"media"`
+	}
+	if json.Unmarshal(raw, &value) != nil {
+		return ""
+	}
+	return value.Media.Revision
+}
+
+func isPostV2(raw json.RawMessage) bool {
+	var value struct {
+		Media struct {
+			SchemaVersion int `json:"schema_version"`
+		} `json:"media"`
+	}
+	return json.Unmarshal(raw, &value) == nil && value.Media.SchemaVersion == 2
+}
+
+// A random revision, persisted with the row, avoids timestamp precision and ABA collisions.
+func newPostRevision() (string, error) {
+	var bytes [16]byte
+	if _, err := rand.Read(bytes[:]); err != nil {
+		return "", err
+	}
+	bytes[6] = bytes[6]&0x0f | 0x40
+	bytes[8] = bytes[8]&0x3f | 0x80
+	encoded := hex.EncodeToString(bytes[:])
+	return encoded[:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" + encoded[16:20] + "-" + encoded[20:], nil
+}
+
+func assignRevision(post *domain.Post) error {
+	var value map[string]json.RawMessage
+	if err := json.Unmarshal(post.I18n, &value); err != nil {
+		return err
+	}
+	var media map[string]json.RawMessage
+	if err := json.Unmarshal(value["media"], &media); err != nil {
+		return err
+	}
+	revision, err := newPostRevision()
+	if err != nil {
+		return err
+	}
+	encoded, err := json.Marshal(revision)
+	if err != nil {
+		return err
+	}
+	media["revision"] = encoded
+	value["media"], err = json.Marshal(media)
+	if err != nil {
+		return err
+	}
+	post.I18n, err = json.Marshal(value)
+	if err == nil {
+		post.Revision = revision
+	}
+	return err
+}
+
+func (r *PostgresPostRepository) GetBySlug(ctx context.Context, slug string, includeDrafts bool) (*domain.Post, error) {
+	var row postRow
+	query := `SELECT ` + postSelect + ` FROM posts WHERE slug = $1 AND ` + postV2Condition
+	if !includeDrafts {
+		query += ` AND is_published = true`
+	}
+	if err := r.db.GetContext(ctx, &row, query, slug); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPostNotFound
+		}
+		return nil, fmt.Errorf("get post: %w", err)
+	}
+	return row.toPost(), nil
+}
+
+func (r *PostgresPostRepository) List(ctx context.Context, filters PostFilterParams) ([]domain.Post, int, error) {
+	if filters.Page < 1 {
+		filters.Page = 1
+	}
+	if filters.Limit < 1 {
+		filters.Limit = 20
+	}
+	if filters.Limit > 100 {
+		filters.Limit = 100
+	}
+	conditions := []string{postV2Condition}
+	if !filters.IncludeDrafts {
+		conditions = append(conditions, "is_published = true")
+	}
+	args := []any{}
+	add := func(condition string, value any) {
+		args = append(args, value)
+		conditions = append(conditions, fmt.Sprintf(condition, len(args)))
+	}
+	if filters.Type != "" {
+		add("type = $%d", filters.Type)
+	}
+	if filters.Tag != "" {
+		add("$%d = ANY(tags)", filters.Tag)
+	}
+	if filters.GemSlug != "" {
+		add("$%d = ANY(gem_slugs)", filters.GemSlug)
+	}
+	where := " WHERE " + strings.Join(conditions, " AND ")
+	var total int
+	if err := r.db.GetContext(ctx, &total, "SELECT COUNT(*) FROM posts"+where, args...); err != nil {
+		return nil, 0, err
+	}
+	order := "DESC"
+	if strings.EqualFold(filters.Order, "asc") {
+		order = "ASC"
+	}
+	query := fmt.Sprintf(`SELECT %s FROM posts%s ORDER BY published_at %s NULLS LAST, slug ASC LIMIT $%d OFFSET $%d`,
+		postSelect, where, order, len(args)+1, len(args)+2)
+	args = append(args, filters.Limit, (filters.Page-1)*filters.Limit)
+	var rows []postRow
+	if err := r.db.SelectContext(ctx, &rows, query, args...); err != nil {
+		return nil, 0, err
+	}
+	posts := make([]domain.Post, 0, len(rows))
+	for _, row := range rows {
+		posts = append(posts, *row.toPost())
+	}
+	return posts, total, nil
+}
+
+func (r *PostgresPostRepository) Search(ctx context.Context, query, _ string, limit, offset int) ([]domain.Post, int, error) {
+	if strings.TrimSpace(query) == "" {
+		return []domain.Post{}, 0, nil
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	where := ` WHERE ` + postV2Condition + ` AND is_published = true AND (
+	  to_tsvector('russian', concat_ws(' ', i18n #>> '{ru,title}', i18n #>> '{ru,excerpt}', i18n #>> '{ru,content}')) @@ plainto_tsquery('russian', $1)
+	  OR to_tsvector('english', concat_ws(' ', i18n #>> '{en,title}', i18n #>> '{en,excerpt}', i18n #>> '{en,content}')) @@ plainto_tsquery('english', $1))`
+	var total int
+	if err := r.db.GetContext(ctx, &total, "SELECT COUNT(*) FROM posts"+where, query); err != nil {
+		return nil, 0, err
+	}
+	var rows []postRow
+	if err := r.db.SelectContext(ctx, &rows, `SELECT `+postSelect+` FROM posts`+where+` ORDER BY published_at DESC NULLS LAST, slug ASC LIMIT $2 OFFSET $3`, query, limit, offset); err != nil {
+		return nil, 0, err
+	}
+	posts := make([]domain.Post, 0, len(rows))
+	for _, row := range rows {
+		posts = append(posts, *row.toPost())
+	}
+	return posts, total, nil
 }
 
 func (r *PostgresPostRepository) Create(ctx context.Context, post *domain.Post) error {
-	// Проверка на уникальность slug
-	var count int
-	err := r.db.GetContext(ctx, &count, "SELECT COUNT(*) FROM posts WHERE slug = $1", post.Slug)
+	if err := assignRevision(post); err != nil {
+		return err
+	}
+	var row postRow
+	query := `INSERT INTO posts (slug, type, i18n, gem_slugs, tags, published_at, updated_at, is_published, author)
+	 VALUES ($1,$2,$3,$4,$5,$6,clock_timestamp(),$7,$8)
+	 RETURNING ` + postSelect
+	err := r.db.GetContext(ctx, &row, query, post.Slug, post.Type, []byte(post.I18n),
+		pq.StringArray(post.GemSlugs), pq.StringArray(post.Tags), post.PublishedAt, post.IsPublished, post.Author)
 	if err != nil {
-		return fmt.Errorf("failed to check slug uniqueness: %w", err)
-	}
-	if count > 0 {
-		return fmt.Errorf("slug_already_exists")
-	}
-
-	i18nJSON, _ := json.Marshal(post.I18n)
-	blocksJSON, _ := json.Marshal(post.ContentBlocks)
-	if post.ContentBlocks == nil {
-		blocksJSON = []byte("[]")
-	}
-
-	query := `
-		INSERT INTO posts (
-			slug, type, i18n, cover_image, content_blocks, gem_slugs, tags,
-			published_at, updated_at, is_published, author
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-		)
-	`
-
-	_, err = r.db.ExecContext(ctx, query,
-		post.Slug,
-		post.Type,
-		i18nJSON,
-		post.CoverImage,
-		blocksJSON,
-		pq.StringArray(post.GemSlugs),
-		pq.StringArray(post.Tags),
-		post.PublishedAt,
-		post.UpdatedAt,
-		post.IsPublished,
-		post.Author,
-	)
-
-	if err != nil {
-		return fmt.Errorf("failed to create post: %w", err)
-	}
-
-	return nil
-}
-
-func (r *PostgresPostRepository) Update(ctx context.Context, oldSlug string, post *domain.Post) error {
-	// Проверка уникальности нового slug (если изменился)
-	if post.Slug != oldSlug {
-		var count int
-		err := r.db.GetContext(ctx, &count, "SELECT COUNT(*) FROM posts WHERE slug = $1", post.Slug)
-		if err != nil {
-			return fmt.Errorf("failed to check slug uniqueness: %w", err)
+		var pgErr *pq.Error
+		if errors.As(err, &pgErr) && string(pgErr.Code) == "23505" {
+			return ErrPostSlugConflict
 		}
-		if count > 0 {
-			return fmt.Errorf("slug_already_exists")
+		return fmt.Errorf("create post: %w", err)
+	}
+	*post = *row.toPost()
+	return nil
+}
+
+func (r *PostgresPostRepository) Update(ctx context.Context, slug, revision string, mutate func(*domain.Post) error) (*domain.Post, error) {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var row postRow
+	if err := tx.GetContext(ctx, &row, `SELECT `+postSelect+` FROM posts WHERE slug = $1 FOR UPDATE`, slug); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPostNotFound
 		}
+		return nil, err
 	}
-
-	i18nJSON, _ := json.Marshal(post.I18n)
-	blocksJSON, _ := json.Marshal(post.ContentBlocks)
-	if post.ContentBlocks == nil {
-		blocksJSON = []byte("[]")
+	if !isPostV2(row.I18n) {
+		return nil, ErrUnsupportedArticleFormat
 	}
-
-	query := `
-		UPDATE posts
-		SET slug = $1, type = $2, i18n = $3,
-		    cover_image = $4, content_blocks = $5, gem_slugs = $6, tags = $7,
-		    published_at = $8, updated_at = NOW(), is_published = $9, author = $10
-		WHERE slug = $11`
-
-	_, err := r.db.ExecContext(ctx, query,
-		post.Slug,
-		post.Type,
-		i18nJSON,
-		post.CoverImage,
-		blocksJSON,
-		pq.StringArray(post.GemSlugs),
-		pq.StringArray(post.Tags),
-		post.PublishedAt,
-		post.IsPublished,
-		post.Author,
-		oldSlug,
-	)
-
+	post := row.toPost()
+	if post.Revision != revision {
+		return nil, ErrPostPrecondition
+	}
+	if err := mutate(post); err != nil {
+		return nil, err
+	}
+	if err := assignRevision(post); err != nil {
+		return nil, err
+	}
+	var updated time.Time
+	err = tx.GetContext(ctx, &updated, `UPDATE posts SET slug=$1, type=$2, i18n=$3, gem_slugs=$4,
+	 tags=$5, published_at=$6, is_published=$7, author=$8, updated_at=clock_timestamp()
+	 WHERE id=$9 RETURNING updated_at`, post.Slug, post.Type, []byte(post.I18n),
+		pq.StringArray(post.GemSlugs), pq.StringArray(post.Tags), post.PublishedAt,
+		post.IsPublished, post.Author, post.ID)
 	if err != nil {
-		return fmt.Errorf("failed to update post: %w", err)
+		var pgErr *pq.Error
+		if errors.As(err, &pgErr) && string(pgErr.Code) == "23505" {
+			return nil, ErrPostSlugConflict
+		}
+		return nil, err
 	}
-
-	return nil
+	post.UpdatedAt = updated
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return post, nil
 }
 
-func (r *PostgresPostRepository) Delete(ctx context.Context, slug string) error {
-	result, err := r.db.ExecContext(ctx, "DELETE FROM posts WHERE slug = $1", slug)
+func (r *PostgresPostRepository) Delete(ctx context.Context, slug, revision string) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to delete post: %w", err)
+		return err
 	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		return fmt.Errorf("post not found")
+	defer tx.Rollback()
+	var row postRow
+	if err := tx.GetContext(ctx, &row, `SELECT `+postSelect+` FROM posts WHERE slug = $1 FOR UPDATE`, slug); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrPostNotFound
+		}
+		return err
 	}
-
-	return nil
+	if !isPostV2(row.I18n) {
+		return ErrUnsupportedArticleFormat
+	}
+	if row.toPost().Revision != revision {
+		return ErrPostPrecondition
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM posts WHERE id = $1`, row.ID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
-// TODO: Implement full CRUD
-func (r *PostgresPostRepository) GetByGemSlug(ctx context.Context, gemSlug string, lang string, limit int) ([]domain.Post, error) {
-	return nil, nil
+func (r *PostgresPostRepository) GetByGemSlug(ctx context.Context, gemSlug string, _ string, limit int) ([]domain.Post, error) {
+	posts, _, err := r.List(ctx, PostFilterParams{GemSlug: gemSlug, Limit: limit})
+	return posts, err
 }

@@ -1,7 +1,10 @@
 // internal/domain/post.go
 package domain
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // PostType — тип статьи
 type PostType string
@@ -39,7 +42,8 @@ type Post struct {
 	Slug string   `json:"slug" validate:"required,alphanumdash"`
 	Type PostType `json:"type" validate:"required,oneof=blog guide history esoteric review"`
 
-	I18n PostI18n `json:"i18n" validate:"required"`
+	// Raw JSON keeps fields unknown to this binary intact during partial updates.
+	I18n json.RawMessage `json:"i18n"`
 
 	CoverImage    string         `json:"cover_image,omitempty"`
 	ContentBlocks []ContentBlock `json:"content_blocks,omitempty" validate:"dive"`
@@ -50,19 +54,70 @@ type Post struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 	IsPublished bool       `json:"is_published"`
 	Author      string     `json:"author,omitempty"`
+	// Revision is stored in i18n.media.revision and exposed as an ETag header.
+	Revision string `json:"-"`
+}
+
+// The revision is persisted in JSONB but exposed through ETag, not the body.
+// Other keys, including unknown i18n extensions, remain in the response.
+func (post Post) MarshalJSON() ([]byte, error) {
+	type plainPost Post
+	visible := plainPost(post)
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(post.I18n, &root); err != nil {
+		return nil, err
+	}
+	if mediaRaw, ok := root["media"]; ok {
+		var media map[string]json.RawMessage
+		if err := json.Unmarshal(mediaRaw, &media); err != nil {
+			return nil, err
+		}
+		delete(media, "revision")
+		encoded, err := json.Marshal(media)
+		if err != nil {
+			return nil, err
+		}
+		root["media"] = encoded
+	}
+	var err error
+	visible.I18n, err = json.Marshal(root)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(visible)
 }
 
 // PostI18n — переводимый контент статьи, тот же паттерн, что и I18n у GemEntity
 type PostI18n struct {
-	Ru PostLangData `json:"ru"`
-	En PostLangData `json:"en"`
+	Ru    PostLangData `json:"ru"`
+	En    PostLangData `json:"en"`
+	Media PostMedia    `json:"media"`
+}
+
+type PostMedia struct {
+	SchemaVersion   int         `json:"schema_version"`
+	Revision        string      `json:"revision,omitempty"`
+	Slides          []PostSlide `json:"slides"`
+	AuthorAvatarURL string      `json:"author_avatar_url,omitempty"`
+}
+
+type LocalizedText struct {
+	Ru string `json:"ru"`
+	En string `json:"en"`
+}
+
+type PostSlide struct {
+	ID      string        `json:"id"`
+	URL     string        `json:"url"`
+	Caption LocalizedText `json:"caption,omitempty"`
+	Alt     LocalizedText `json:"alt"`
 }
 
 // PostLangData — контент статьи на одном языке
 type PostLangData struct {
 	Title   string `json:"title" validate:"required"`
 	Excerpt string `json:"excerpt,omitempty"`
-	Content string `json:"content,omitempty"` // Markdown или HTML — устаревшее поле, для старых статей до перехода на блоки
+	Content string `json:"content,omitempty"` // Article V2 Markdown
 
 	// Override общей обложки (Post.CoverImage) для этого языка — на случай, если обложка
 	// сама несёт текст (баннер с заголовком на картинке и т.п.). Если пусто — используется

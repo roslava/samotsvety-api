@@ -1,22 +1,24 @@
 {
-  "slug": "malachite-history",
-  "type": "history",
+  "slug": "why-is-malachite-green",
+  "type": "guide",
   "i18n": {
     "ru": {
-      "title": "История уральского малахита",
-      "excerpt": "Как малахит стал символом Урала и камнерезного искусства России.",
-      "content": "# Малахит на Урале\n\nМалахит добывался на Урале с XVIII века..."
+      "title": "Почему малахит зелёный?",
+      "excerpt": "",
+      "content": ""
     },
     "en": {
-      "title": "History of Ural Malachite",
-      "excerpt": "How malachite became a symbol of the Urals and Russian stone carving art.",
-      "content": "# Malachite in the Urals\n\nMalachite has been mined in the Urals since the 18th century..."
+      "title": "Why is malachite green?",
+      "excerpt": "",
+      "content": ""
+    },
+    "media": {
+      "slides": [],
+      "author_avatar_url": ""
     }
   },
-  "cover_image": "https://cdn.samotsvety.com/images/posts/malachite-history.jpg",
   "gem_slugs": ["malachite"],
-  "tags": ["урал", "история", "каменное-дело"],
-  "published_at": "2026-07-01T10:00:00Z",
-  "is_published": true,
-  "author": "roslava"
+  "tags": [],
+  "is_published": false,
+  "author": ""
 }

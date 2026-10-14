@@ -5,11 +5,15 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"path"
 	"strings"
 	"time"
+
+	"github.com/aws/smithy-go"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -38,6 +42,18 @@ type MediaStorage interface {
 	// изображения в галерее минерала (ruby01.webp, ruby02.webp, ...).
 	ListKeys(ctx context.Context, prefix string) ([]string, error)
 }
+
+// ArticleMediaStorage exposes server-authenticated reads for Article V2.
+type ArticleMediaStorage interface {
+	MediaStorage
+	UploadUnique(ctx context.Context, key, contentType string, data io.Reader, size int64) (string, error)
+	ArticleKey(publicURL string) (string, error)
+	ReadObject(ctx context.Context, key string, maxBytes int64) ([]byte, error)
+}
+
+var ErrInvalidArticleURL = fmt.Errorf("invalid article media URL")
+var ErrObjectNotFound = fmt.Errorf("media object not found")
+var ErrObjectTooLarge = fmt.Errorf("media object too large")
 
 type yandexS3Storage struct {
 	client    *s3.Client
@@ -89,6 +105,20 @@ func (s *yandexS3Storage) UploadAt(ctx context.Context, key, contentType string,
 	return s.putObject(ctx, key, contentType, data, size)
 }
 
+// UploadUnique uses S3's atomic create-if-absent condition. Article uploads
+// cannot overwrite an existing object even if a random filename collides.
+func (s *yandexS3Storage) UploadUnique(ctx context.Context, key, contentType string, data io.Reader, size int64) (string, error) {
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(s.bucket), Key: aws.String(key), Body: data,
+		ContentType: aws.String(contentType), ContentLength: aws.Int64(size),
+		ACL: "public-read", IfNoneMatch: aws.String("*"),
+	})
+	if err != nil {
+		return "", fmt.Errorf("storage: upload unique failed: %w", err)
+	}
+	return s.publicURL + "/" + key, nil
+}
+
 func (s *yandexS3Storage) putObject(ctx context.Context, key, contentType string, data io.Reader, size int64) (string, error) {
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(s.bucket),
@@ -126,6 +156,51 @@ func (s *yandexS3Storage) ListKeys(ctx context.Context, prefix string) ([]string
 	}
 
 	return keys, nil
+}
+
+// ArticleKey accepts only the canonical URL emitted by this storage instance.
+// Escapes, query strings, fragments and path normalization are intentionally rejected.
+func (s *yandexS3Storage) ArticleKey(raw string) (string, error) {
+	base, err := url.Parse(s.publicURL)
+	if err != nil || base.Scheme != "https" || base.Host == "" || base.RawQuery != "" || base.Fragment != "" || base.User != nil {
+		return "", ErrInvalidArticleURL
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != base.Scheme || u.Host != base.Host || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" || strings.Contains(raw, "%") {
+		return "", ErrInvalidArticleURL
+	}
+	prefix := strings.TrimRight(base.Path, "/") + "/"
+	if !strings.HasPrefix(u.Path, prefix) {
+		return "", ErrInvalidArticleURL
+	}
+	key := strings.TrimPrefix(u.Path, prefix)
+	if key == "" || strings.Contains(key, "//") || strings.Contains(key, "\\") || path.Clean(key) != key || strings.ContainsAny(key, "?#") || raw != s.publicURL+"/"+key {
+		return "", ErrInvalidArticleURL
+	}
+	return key, nil
+}
+
+func (s *yandexS3Storage) ReadObject(ctx context.Context, key string, maxBytes int64) ([]byte, error) {
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
+	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && (apiErr.ErrorCode() == "NoSuchKey" || apiErr.ErrorCode() == "NotFound") {
+			return nil, ErrObjectNotFound
+		}
+		return nil, fmt.Errorf("storage: read object: %w", err)
+	}
+	defer out.Body.Close()
+	if out.ContentLength != nil && *out.ContentLength > maxBytes {
+		return nil, ErrObjectTooLarge
+	}
+	data, err := io.ReadAll(io.LimitReader(out.Body, maxBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("storage: read object body: %w", err)
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, ErrObjectTooLarge
+	}
+	return data, nil
 }
 
 // uniqueFilename добавляет к оригинальному имени файла дату и случайный суффикс,

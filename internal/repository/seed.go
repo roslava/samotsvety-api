@@ -1,7 +1,10 @@
 package repository
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -91,79 +94,107 @@ func SeedMinerals(db *sqlx.DB, seedDir string) error {
 	return nil
 }
 
-// SeedPosts читает *.json из seedDir и загружает их в таблицу posts.
-// Работает по тому же принципу, что и SeedMinerals: ON CONFLICT (slug) DO UPDATE,
-// так что seed можно запускать повторно без дублей.
-func SeedPosts(db *sqlx.DB, seedDir string) error {
+type SeedPostsReport struct {
+	Inserted int
+	Skipped  int
+	Invalid  int
+}
+
+type SeedPostPreparer func(context.Context, []byte) (*domain.Post, error)
+
+type seedPostExecer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+const insertSeedPostSQL = `INSERT INTO posts
+  (slug, type, i18n, gem_slugs, tags, published_at, updated_at, is_published, author)
+  VALUES ($1,$2,$3,$4,$5,$6,clock_timestamp(),$7,$8)
+  ON CONFLICT (slug) DO NOTHING`
+
+// SeedPosts validates every file before opening a transaction, then inserts
+// only previously unseen slugs. The required preparer is shared with POST.
+func SeedPosts(ctx context.Context, db *sqlx.DB, seedDir string, prepare SeedPostPreparer) (SeedPostsReport, error) {
+	posts, report, err := loadSeedPosts(ctx, seedDir, prepare)
+	if err != nil {
+		return report, err
+	}
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return report, fmt.Errorf("begin post seed transaction: %w", err)
+	}
+	defer tx.Rollback()
+	report, err = insertPreparedSeedPosts(ctx, tx, posts)
+	if err != nil {
+		return SeedPostsReport{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return SeedPostsReport{}, fmt.Errorf("commit post seed: %w", err)
+	}
+	return report, nil
+}
+
+func loadSeedPosts(ctx context.Context, seedDir string, prepare SeedPostPreparer) ([]*domain.Post, SeedPostsReport, error) {
+	var report SeedPostsReport
+	if prepare == nil {
+		return nil, report, errors.New("Article V2 seed preparer is required")
+	}
 	files, err := os.ReadDir(seedDir)
 	if err != nil {
-		return fmt.Errorf("failed to read seed directory: %w", err)
+		return nil, report, fmt.Errorf("failed to read seed directory: %w", err)
 	}
-
+	posts := make([]*domain.Post, 0)
+	problems := make([]error, 0)
 	for _, file := range files {
-		if filepath.Ext(file.Name()) != ".json" {
+		if file.IsDir() || filepath.Ext(file.Name()) != ".json" {
 			continue
 		}
-
 		path := filepath.Join(seedDir, file.Name())
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return fmt.Errorf("failed to read %s: %w", path, err)
+			report.Invalid++
+			problems = append(problems, fmt.Errorf("%s: cannot read seed file: %w", file.Name(), err))
+			continue
 		}
-
-		var post domain.Post
-		if err := json.Unmarshal(data, &post); err != nil {
-			return fmt.Errorf("failed to unmarshal %s: %w", path, err)
-		}
-
-		i18nJSON, _ := json.Marshal(post.I18n)
-
-		gemSlugs := post.GemSlugs
-		if gemSlugs == nil {
-			gemSlugs = []string{}
-		}
-		tags := post.Tags
-		if tags == nil {
-			tags = []string{}
-		}
-
-		query := `
-			INSERT INTO posts (
-				slug, type, i18n, cover_image, gem_slugs, tags,
-				published_at, updated_at, is_published, author,
-				created_at
-			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, $9, NOW())
-			ON CONFLICT (slug) DO UPDATE
-			SET
-				type = EXCLUDED.type,
-				i18n = EXCLUDED.i18n,
-				cover_image = EXCLUDED.cover_image,
-				gem_slugs = EXCLUDED.gem_slugs,
-				tags = EXCLUDED.tags,
-				published_at = EXCLUDED.published_at,
-				updated_at = NOW(),
-				is_published = EXCLUDED.is_published,
-				author = EXCLUDED.author
-		`
-
-		_, err = db.Exec(query,
-			post.Slug,
-			post.Type,
-			i18nJSON,
-			post.CoverImage,
-			pq.StringArray(gemSlugs),
-			pq.StringArray(tags),
-			post.PublishedAt,
-			post.IsPublished,
-			post.Author,
-		)
+		post, err := prepare(ctx, data)
 		if err != nil {
-			return fmt.Errorf("failed to seed %s: %w", post.Slug, err)
+			report.Invalid++
+			problems = append(problems, fmt.Errorf("%s: %w", file.Name(), err))
+			continue
 		}
-
-		fmt.Printf("✅ Seeded: %s (type: %s)\n", post.Slug, post.Type)
+		posts = append(posts, post)
 	}
+	if len(problems) > 0 {
+		return nil, report, errors.Join(problems...)
+	}
+	return posts, report, nil
+}
 
-	return nil
+func insertPreparedSeedPosts(ctx context.Context, exec seedPostExecer, posts []*domain.Post) (SeedPostsReport, error) {
+	var report SeedPostsReport
+	for _, post := range posts {
+		inserted, err := insertSeedPost(ctx, exec, post)
+		if err != nil {
+			return SeedPostsReport{}, fmt.Errorf("seed post %q: %w", post.Slug, err)
+		}
+		if inserted {
+			report.Inserted++
+		} else {
+			report.Skipped++
+		}
+	}
+	return report, nil
+}
+
+func insertSeedPost(ctx context.Context, exec seedPostExecer, post *domain.Post) (bool, error) {
+	if err := assignRevision(post); err != nil {
+		return false, err
+	}
+	result, err := exec.ExecContext(ctx, insertSeedPostSQL,
+		post.Slug, post.Type, []byte(post.I18n), pq.StringArray(post.GemSlugs),
+		pq.StringArray(post.Tags), post.PublishedAt, post.IsPublished, post.Author)
+	if err != nil {
+		return false, err
+	}
+	count, err := result.RowsAffected()
+	return count == 1, err
 }

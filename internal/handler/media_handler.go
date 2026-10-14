@@ -3,6 +3,9 @@ package handler
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -19,6 +22,8 @@ import (
 )
 
 const maxUploadSize = 10 << 20 // 10 MB
+
+var articleConversionSlots = make(chan struct{}, 2)
 
 // webpQuality — качество WebP-конвертации (0..100). Для каталожных фото минералов
 // держим высоким, чтобы не терять резкость/детали при хорошем сжатии.
@@ -73,8 +78,9 @@ func NewMediaHandler(s storage.MediaStorage) *MediaHandler {
 // @Accept       multipart/form-data
 // @Produce      json
 // @Param        file         formData  file    true   "Файл изображения"
-// @Param        kind         formData  string  true   "hero | thumbnail | gallery | cover | block_image | block_pair"
+// @Param        kind         formData  string  true   "hero | thumbnail | gallery | cover | block_image | block_pair | article_slide | author_avatar"
 // @Param        slug         formData  string  true   "Slug минерала или статьи"
+// @Param        slide_id     formData  string  false  "UUID слайда (для article_slide)"
 // @Param        block_index  formData  int     false  "Порядковый номер блока в статье (для block_image/block_pair)"
 // @Param        pair_index   formData  int     false  "1 или 2 — какая картинка в паре (для block_pair)"
 // @Param        lang         formData  string  false  "ru | en — языковой оверрайд (для cover/block_image/block_pair)"
@@ -87,12 +93,15 @@ func (h *MediaHandler) UploadMedia(c *gin.Context) {
 		return
 	}
 
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadSize)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadSize+(1<<20))
 
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
 		RespondWithError(c, http.StatusBadRequest, "Файл не передан (ожидается поле form-data \"file\")")
 		return
+	}
+	if c.Request.MultipartForm != nil {
+		defer c.Request.MultipartForm.RemoveAll()
 	}
 
 	if fileHeader.Size > maxUploadSize {
@@ -100,13 +109,13 @@ func (h *MediaHandler) UploadMedia(c *gin.Context) {
 		return
 	}
 
+	kind := c.PostForm("kind")
 	contentType := fileHeader.Header.Get("Content-Type")
-	if !allowedImageTypes[contentType] {
+	if kind != "article_slide" && kind != "author_avatar" && !allowedImageTypes[contentType] {
 		RespondWithError(c, http.StatusBadRequest, "Недопустимый тип файла: разрешены jpeg, png, webp, gif")
 		return
 	}
 
-	kind := c.PostForm("kind")
 	slug := strings.ToLower(strings.TrimSpace(c.PostForm("slug")))
 	lang := strings.ToLower(strings.TrimSpace(c.PostForm("lang")))
 
@@ -127,9 +136,91 @@ func (h *MediaHandler) UploadMedia(c *gin.Context) {
 		h.uploadMineralImage(c, kind, slug, file, fileHeader)
 	case "cover", "block_image", "block_pair":
 		h.uploadArticleImage(c, kind, slug, lang, file, fileHeader)
+	case "article_slide", "author_avatar":
+		h.uploadArticleV2Image(c, kind, slug, strings.TrimSpace(c.PostForm("slide_id")), file)
 	default:
-		RespondWithError(c, http.StatusBadRequest, "Неизвестное значение поля \"kind\": ожидается hero, thumbnail, gallery, cover, block_image или block_pair")
+		RespondWithError(c, http.StatusBadRequest, "Неизвестное значение поля \"kind\"")
 	}
+}
+
+func (h *MediaHandler) uploadArticleV2Image(c *gin.Context, kind, slug, slideID string, file io.Reader) {
+	if !slugPattern.MatchString(slug) || len(slug) > 255 {
+		NewErrorResponse(c, http.StatusBadRequest, "validation_error", "invalid slug")
+		return
+	}
+	if kind == "article_slide" && !postUUIDPattern.MatchString(slideID) {
+		NewErrorResponse(c, http.StatusBadRequest, "validation_error", "invalid slide_id")
+		return
+	}
+	select {
+	case articleConversionSlots <- struct{}{}:
+		defer func() { <-articleConversionSlots }()
+	case <-c.Request.Context().Done():
+		return
+	}
+	raw, err := io.ReadAll(io.LimitReader(file, maxUploadSize+1))
+	if err != nil {
+		RespondInternalError(c, "Не удалось прочитать файл")
+		return
+	}
+	if len(raw) > maxUploadSize {
+		NewErrorResponse(c, http.StatusBadRequest, "validation_error", "file exceeds 10 MB")
+		return
+	}
+	prepared, w, height, err := imaging.NormalizeArticleInput(raw)
+	if err != nil {
+		NewErrorResponse(c, http.StatusBadRequest, "validation_error", "invalid image")
+		return
+	}
+	if kind == "article_slide" && !imaging.IsSixteenNine(w, height) {
+		NewErrorResponse(c, http.StatusBadRequest, "invalid_aspect_ratio", "slide must be exactly 16:9")
+		return
+	}
+	webpBytes, err := imaging.ToWebP(c.Request.Context(), prepared, webpQuality)
+	if err != nil {
+		if errors.Is(err, imaging.ErrConverterUnavailable) {
+			NewErrorResponse(c, http.StatusServiceUnavailable, "media_conversion_unavailable", "WebP conversion is unavailable")
+			return
+		}
+		NewErrorResponse(c, http.StatusBadRequest, "validation_error", "image cannot be decoded or converted")
+		return
+	}
+	outW, outH, err := imaging.WebPDimensions(webpBytes)
+	if err != nil {
+		NewErrorResponse(c, http.StatusServiceUnavailable, "media_conversion_unavailable", "Converted WebP is invalid")
+		return
+	}
+	if len(webpBytes) > maxVerifiedWebPSize {
+		NewErrorResponse(c, http.StatusBadRequest, "validation_error", "converted image is too large")
+		return
+	}
+	if outW != w || outH != height || (kind == "article_slide" && !imaging.IsSixteenNine(outW, outH)) {
+		NewErrorResponse(c, http.StatusBadRequest, "invalid_aspect_ratio", "converted image dimensions differ from input")
+		return
+	}
+	random := make([]byte, 16)
+	if _, err := rand.Read(random); err != nil {
+		RespondInternalError(c, "Не удалось создать имя файла")
+		return
+	}
+	var key string
+	if kind == "article_slide" {
+		key = fmt.Sprintf("articles/%s/slides/%s/%s.webp", slug, slideID, hex.EncodeToString(random))
+	} else {
+		key = fmt.Sprintf("articles/%s/authors/%s.webp", slug, hex.EncodeToString(random))
+	}
+	articleStorage, ok := h.storage.(storage.ArticleMediaStorage)
+	if !ok {
+		NewErrorResponse(c, http.StatusServiceUnavailable, "media_verification_unavailable", "Article media storage is not configured")
+		return
+	}
+	url, err := articleStorage.UploadUnique(c.Request.Context(), key, "image/webp", bytes.NewReader(webpBytes), int64(len(webpBytes)))
+	if err != nil {
+		slog.Error("Failed to upload Article V2 media", "error", err, "key", key)
+		RespondInternalError(c, "Не удалось загрузить файл")
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"url": url})
 }
 
 // uploadArticleImage реализует структуру бакета для статей:

@@ -4,11 +4,14 @@ package imaging
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 )
+
+var ErrConverterUnavailable = errors.New("webp converter unavailable")
 
 // ToWebP конвертирует произвольное растровое изображение (jpeg/png/webp/gif-первый кадр)
 // в WebP через бинарник cwebp (libwebp).
@@ -25,7 +28,7 @@ import (
 // если не передавать -resize.
 func ToWebP(ctx context.Context, data []byte, quality int) ([]byte, error) {
 	if _, err := exec.LookPath("cwebp"); err != nil {
-		return nil, fmt.Errorf("imaging: бинарник cwebp не найден в PATH — установите пакет webp (apt-get install webp) на сервере: %w", err)
+		return nil, fmt.Errorf("%w: cwebp not found: %v", ErrConverterUnavailable, err)
 	}
 
 	if quality <= 0 || quality > 100 {
@@ -34,7 +37,7 @@ func ToWebP(ctx context.Context, data []byte, quality int) ([]byte, error) {
 
 	tmpDir, err := os.MkdirTemp("", "webp-convert-*")
 	if err != nil {
-		return nil, fmt.Errorf("imaging: не удалось создать временную директорию: %w", err)
+		return nil, fmt.Errorf("%w: temporary directory: %v", ErrConverterUnavailable, err)
 	}
 	defer os.RemoveAll(tmpDir)
 
@@ -42,7 +45,7 @@ func ToWebP(ctx context.Context, data []byte, quality int) ([]byte, error) {
 	outPath := filepath.Join(tmpDir, "out.webp")
 
 	if err := os.WriteFile(inPath, data, 0o600); err != nil {
-		return nil, fmt.Errorf("imaging: не удалось записать временный файл: %w", err)
+		return nil, fmt.Errorf("%w: write temporary file: %v", ErrConverterUnavailable, err)
 	}
 
 	// -q <quality>  — качество сжатия (без -lossless: для фото лучше баланс размер/резкость)
@@ -67,7 +70,7 @@ func ToWebP(ctx context.Context, data []byte, quality int) ([]byte, error) {
 
 	out, err := os.ReadFile(outPath)
 	if err != nil {
-		return nil, fmt.Errorf("imaging: не удалось прочитать результат конвертации: %w", err)
+		return nil, fmt.Errorf("%w: read converted file: %v", ErrConverterUnavailable, err)
 	}
 
 	return out, nil
