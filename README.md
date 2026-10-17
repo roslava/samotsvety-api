@@ -103,3 +103,44 @@ Docker + Makefile
 - `DELETE /api/v1/posts/{slug}` — удаление (admin)
 - `GET /api/v1/search/posts?q=...` — поиск
 
+# Lithoteka CDN
+
+Настройте `YC_S3_BUCKET=lithoteka-cdn` и
+`YC_S3_PUBLIC_URL=https://storage.yandexcloud.net/lithoteka-cdn` вместе с
+`YC_S3_ENDPOINT`, `YC_S3_REGION`, `YC_S3_ACCESS_KEY` и `YC_S3_SECRET_KEY`.
+Пустые ключи отключают загрузку медиа. Для WebP требуется `cwebp` в `PATH`.
+
+Изображения сущности API V2 остаются в JSON как `storage_key` и относительные
+`path`. Полный ключ: `entities/{storage_key}/images/{path}`. Загрузка через
+`POST /api/v1/media` принимает `kind=hero|thumbnail|gallery`, `slug` и
+`storage_key` (передавайте сохранённый ключ сущности, если он отличается от
+`slug`). При отсутствии `storage_key` используется `slug` для старых клиентов.
+`hero` и `thumbnail` явно заменяют прежний объект; `gallery` добавляет файл
+`gallery/{storage_key}NN.webp` без перезаписи.
+
+Для новых статей обложка хранится в `i18n.media.cover_frames` как объект с
+тремя упорядоченными массивами URL: `default`, `ru`, `en`. Список меняется через
+существующий `PUT /api/v1/posts/{slug}` с `If-Match` и патчем вида
+`{"i18n":{"media":{"cover_frames":{"default":["https://..."],"ru":[],"en":[]}}}}`.
+Удаление URL из массива не удаляет файл. Пустые массивы отключают старый поиск
+кадров в S3; отсутствие поля оставляет его для существующих статей.
+Публичный
+`GET /api/v1/posts/{slug}/cover-frames?lang=ru` возвращает
+`{"slug":"...","lang":"ru","frames":[{"index":1,"url":"..."}]}`.
+При пустой языковой последовательности возвращается универсальная.
+`GET /api/v1/posts/{slug}/cover-frames?all=1` с админским ключом возвращает
+также `sequences` (три исходных массива) и `managed` (сохранены ли новые списки).
+Старый `POST /api/v1/media` с `kind=cover` остаётся для других клиентов, но
+редактор статей использует существующие URL из CDN и не загружает файлы.
+`block_image` и `block_pair` сохраняют прежние имена файлов, но теперь в
+`articles/{slug}/images/content/`.
+Новые загрузки Article V2 `article_slide` и `author_avatar` также размещаются
+в `images/content/slides/` и `images/content/authors/`; валидатор принимает
+прежние пути для уже сохранённых записей.
+
+Старые полные URL статей в `posts.cover_image`, локализованных
+`i18n.ru/en.cover_image`, `content_blocks` и `i18n.media.slides` не переписываются
+автоматически. При переходе на новые списки редактор сохраняет только ссылки;
+файлы не копируются и не перемещаются. Существующие URL старого бакета в слайдах
+можно оставить без изменения при редактировании других полей статьи.
+

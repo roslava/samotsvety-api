@@ -13,6 +13,8 @@ import (
 )
 
 var ErrInvalidArticleMedia = errors.New("invalid article media")
+var ErrInvalidArticleMediaURL = errors.New("invalid article media URL")
+var ErrArticleMediaMissing = errors.New("article media object not found")
 var immutableName = regexp.MustCompile(`^[0-9a-f]{32}\.webp$`)
 
 type ArticleMediaVerifier struct{ storage storage.ArticleMediaStorage }
@@ -30,21 +32,31 @@ func (v *ArticleMediaVerifier) VerifySlide(ctx context.Context, slug string, sli
 	}
 	key, err := v.storage.ArticleKey(slide.URL)
 	if err != nil {
-		return ErrInvalidArticleMedia
+		return ErrInvalidArticleMediaURL
 	}
-	prefix := fmt.Sprintf("articles/%s/slides/%s/", slug, slide.ID)
-	if !strings.HasPrefix(key, prefix) || !immutableName.MatchString(strings.TrimPrefix(key, prefix)) {
-		return ErrInvalidArticleMedia
+	if slide.Source == "cdn" {
+		if !supportedArticleImageKey(key) {
+			return ErrInvalidArticleMedia
+		}
+	} else {
+		prefix := fmt.Sprintf("articles/%s/images/content/slides/%s/", slug, slide.ID)
+		legacyPrefix := fmt.Sprintf("articles/%s/slides/%s/", slug, slide.ID)
+		if !(strings.HasPrefix(key, prefix) && immutableName.MatchString(strings.TrimPrefix(key, prefix))) &&
+			!(strings.HasPrefix(key, legacyPrefix) && immutableName.MatchString(strings.TrimPrefix(key, legacyPrefix))) {
+			return ErrInvalidArticleMedia
+		}
 	}
 	data, err := v.storage.ReadObject(ctx, key, maxVerifiedWebPSize)
 	if err != nil {
-		if errors.Is(err, storage.ErrObjectNotFound) || errors.Is(err, storage.ErrObjectTooLarge) {
+		if errors.Is(err, storage.ErrObjectNotFound) {
+			return ErrArticleMediaMissing
+		}
+		if errors.Is(err, storage.ErrObjectTooLarge) {
 			return ErrInvalidArticleMedia
 		}
-		return fmt.Errorf("%w: %v", ErrMediaVerificationUnavailable, err)
+		return fmt.Errorf("%w: %w", ErrMediaVerificationUnavailable, err)
 	}
-	w, h, err := imaging.WebPDimensions(data)
-	if err != nil || !imaging.IsSixteenNine(w, h) {
+	if _, _, _, err := imaging.ArticleInputDimensions(data); err != nil {
 		return ErrInvalidArticleMedia
 	}
 	return nil
@@ -59,20 +71,24 @@ func (v *ArticleMediaVerifier) VerifyAvatar(ctx context.Context, slug, rawURL st
 	}
 	key, err := v.storage.ArticleKey(rawURL)
 	if err != nil {
-		return ErrInvalidArticleMedia
+		return ErrInvalidArticleMediaURL
 	}
-	prefix := fmt.Sprintf("articles/%s/authors/", slug)
-	if !strings.HasPrefix(key, prefix) || !immutableName.MatchString(strings.TrimPrefix(key, prefix)) {
+	// The article stores a reference to an existing image in this bucket. The
+	// object may live anywhere in it, including after an article slug change.
+	if !supportedArticleImageKey(key) {
 		return ErrInvalidArticleMedia
 	}
 	data, err := v.storage.ReadObject(ctx, key, maxVerifiedWebPSize)
 	if err != nil {
-		if errors.Is(err, storage.ErrObjectNotFound) || errors.Is(err, storage.ErrObjectTooLarge) {
+		if errors.Is(err, storage.ErrObjectNotFound) {
+			return ErrArticleMediaMissing
+		}
+		if errors.Is(err, storage.ErrObjectTooLarge) {
 			return ErrInvalidArticleMedia
 		}
-		return fmt.Errorf("%w: %v", ErrMediaVerificationUnavailable, err)
+		return fmt.Errorf("%w: %w", ErrMediaVerificationUnavailable, err)
 	}
-	if _, _, err := imaging.WebPDimensions(data); err != nil {
+	if _, _, _, err := imaging.ArticleInputDimensions(data); err != nil {
 		return ErrInvalidArticleMedia
 	}
 	return nil

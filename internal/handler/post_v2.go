@@ -20,8 +20,8 @@ var (
 )
 
 type SlideMediaVerifier interface {
-	// A successful result must prove that this exact object was accepted by the
-	// uploader and passed its 16:9 check. A matching URL host is not proof.
+	// A successful result must prove that this exact object is a readable WebP
+	// in the configured media storage. A matching URL host is not proof.
 	VerifySlide(context.Context, string, domain.PostSlide) error
 	VerifyAvatar(context.Context, string, string) error
 }
@@ -153,7 +153,7 @@ func mergeJSONObjects(existing, patch json.RawMessage, path string) (json.RawMes
 			base[key] = value
 			continue
 		}
-		if key == "ru" || key == "en" || key == "media" || key == "caption" || key == "alt" {
+		if key == "media" || key == "caption" || key == "alt" || ((key == "ru" || key == "en") && len(bytes.TrimSpace(value)) > 0 && bytes.TrimSpace(value)[0] == '{') {
 			current := base[key]
 			if len(current) == 0 {
 				current = json.RawMessage(`{}`)
@@ -206,7 +206,14 @@ func validHTTPSURL(raw string) bool {
 	return err == nil && u.Scheme == "https" && u.Host != "" && u.User == nil
 }
 
-func validateArticle(ctx context.Context, post *domain.Post, verifier SlideMediaVerifier) error {
+func unchangedLegacyMedia(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.Scheme == "https" && u.User == nil && u.RawQuery == "" && u.Fragment == "" &&
+		(u.Hostname() == "samotsvety-cdn.storage.yandexcloud.net" ||
+			(u.Hostname() == "storage.yandexcloud.net" && strings.HasPrefix(u.Path, "/samotsvety-cdn/")))
+}
+
+func validateArticle(ctx context.Context, post *domain.Post, verifier SlideMediaVerifier, prior ...*domain.Post) error {
 	issues := make([]PostFieldError, 0)
 	add := func(path, message string) { issues = append(issues, PostFieldError{Path: path, Message: message}) }
 	if !postSlugPattern.MatchString(post.Slug) || len(post.Slug) > 255 {
@@ -246,6 +253,11 @@ func validateArticle(ctx context.Context, post *domain.Post, verifier SlideMedia
 	media, err := parseJSONObject(root["media"], "i18n.media")
 	if err != nil {
 		return err
+	}
+	if raw, ok := media["cover_frames"]; ok {
+		if err := validateCoverFrames(raw); err != nil {
+			return err
+		}
 	}
 	var schemaVersion int
 	if json.Unmarshal(media["schema_version"], &schemaVersion) != nil || schemaVersion != 2 {
@@ -295,7 +307,17 @@ func validateArticle(ctx context.Context, post *domain.Post, verifier SlideMedia
 		if !validHTTPSURL(urlText) {
 			add(path+".url", "invalid HTTPS URL")
 		}
-		item := domain.PostSlide{ID: id, URL: urlText}
+		source := ""
+		if raw, ok := slide["source"]; ok {
+			source, err = stringValue(raw, path+".source")
+			if err != nil {
+				return err
+			}
+			if source != "cdn" {
+				add(path+".source", "unsupported source")
+			}
+		}
+		item := domain.PostSlide{ID: id, URL: urlText, Source: source}
 		for _, field := range []string{"caption", "alt"} {
 			raw, ok := slide[field]
 			if !ok {
@@ -341,13 +363,28 @@ func validateArticle(ctx context.Context, post *domain.Post, verifier SlideMedia
 	if len(issues) > 0 {
 		return &PostValidationError{Fields: issues}
 	}
-	if avatarURL != "" {
+	var old struct {
+		Media struct {
+			Slides          []domain.PostSlide `json:"slides"`
+			AuthorAvatarURL string             `json:"author_avatar_url"`
+		} `json:"media"`
+	}
+	if len(prior) > 0 && prior[0] != nil {
+		_ = json.Unmarshal(prior[0].I18n, &old)
+	}
+	if avatarURL != "" && !(avatarURL == old.Media.AuthorAvatarURL && unchangedLegacyMedia(avatarURL)) {
 		if verifier == nil {
 			return ErrMediaVerificationUnavailable
 		}
 		if err := verifier.VerifyAvatar(ctx, post.Slug, avatarURL); err != nil {
 			if errors.Is(err, ErrMediaVerificationUnavailable) {
 				return err
+			}
+			if errors.Is(err, ErrInvalidArticleMediaURL) {
+				return fieldError("i18n.media.author_avatar_url", "invalid Lithoteka CDN URL")
+			}
+			if errors.Is(err, ErrArticleMediaMissing) {
+				return fieldError("i18n.media.author_avatar_url", "media object not found")
 			}
 			return fieldError("i18n.media.author_avatar_url", "media file is not verified")
 		}
@@ -357,11 +394,29 @@ func validateArticle(ctx context.Context, post *domain.Post, verifier SlideMedia
 			return ErrMediaVerificationUnavailable
 		}
 		for i, slide := range verified {
+			if unchangedLegacyMedia(slide.URL) {
+				unchanged := false
+				for _, previous := range old.Media.Slides {
+					if previous.ID == slide.ID && previous.URL == slide.URL && previous.Source == slide.Source {
+						unchanged = true
+						break
+					}
+				}
+				if unchanged {
+					continue
+				}
+			}
 			if err := verifier.VerifySlide(ctx, post.Slug, slide); err != nil {
 				if errors.Is(err, ErrMediaVerificationUnavailable) {
 					return err
 				}
-				return fieldError(fmt.Sprintf("i18n.media.slides[%d].url", i), "media file has not been verified as 16:9")
+				if errors.Is(err, ErrInvalidArticleMediaURL) {
+					return fieldError(fmt.Sprintf("i18n.media.slides[%d].url", i), "invalid Lithoteka CDN URL")
+				}
+				if errors.Is(err, ErrArticleMediaMissing) {
+					return fieldError(fmt.Sprintf("i18n.media.slides[%d].url", i), "media object not found")
+				}
+				return fieldError(fmt.Sprintf("i18n.media.slides[%d].url", i), "media file is missing or is not a valid WebP")
 			}
 		}
 	}

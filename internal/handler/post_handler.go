@@ -273,6 +273,8 @@ func (h *PostHandler) UpdatePost(c *gin.Context) {
 		return
 	}
 	post, err := h.repo.Update(c.Request.Context(), c.Param("slug"), revision, func(post *domain.Post) error {
+		prior := *post
+		prior.I18n = append(json.RawMessage(nil), post.I18n...)
 		if err := applyPostFields(post, payload, false); err != nil {
 			return err
 		}
@@ -280,7 +282,7 @@ func (h *PostHandler) UpdatePost(c *gin.Context) {
 			now := time.Now().UTC()
 			post.PublishedAt = &now
 		}
-		return validateArticle(c.Request.Context(), post, h.mediaVerifier)
+		return validateArticle(c.Request.Context(), post, h.mediaVerifier, &prior)
 	})
 	if err != nil {
 		respondPostError(c, err)

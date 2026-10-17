@@ -47,13 +47,16 @@ type MediaStorage interface {
 type ArticleMediaStorage interface {
 	MediaStorage
 	UploadUnique(ctx context.Context, key, contentType string, data io.Reader, size int64) (string, error)
+	PublicURL(key string) string
 	ArticleKey(publicURL string) (string, error)
 	ReadObject(ctx context.Context, key string, maxBytes int64) ([]byte, error)
 }
 
 var ErrInvalidArticleURL = fmt.Errorf("invalid article media URL")
 var ErrObjectNotFound = fmt.Errorf("media object not found")
+var ErrObjectAccessDenied = fmt.Errorf("media object access denied")
 var ErrObjectTooLarge = fmt.Errorf("media object too large")
+var ErrObjectExists = fmt.Errorf("media object already exists")
 
 type yandexS3Storage struct {
 	client    *s3.Client
@@ -114,10 +117,16 @@ func (s *yandexS3Storage) UploadUnique(ctx context.Context, key, contentType str
 		ACL: "public-read", IfNoneMatch: aws.String("*"),
 	})
 	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && (apiErr.ErrorCode() == "PreconditionFailed" || apiErr.ErrorCode() == "ConditionalRequestConflict") {
+			return "", ErrObjectExists
+		}
 		return "", fmt.Errorf("storage: upload unique failed: %w", err)
 	}
-	return s.publicURL + "/" + key, nil
+	return s.PublicURL(key), nil
 }
+
+func (s *yandexS3Storage) PublicURL(key string) string { return s.publicURL + "/" + key }
 
 func (s *yandexS3Storage) putObject(ctx context.Context, key, contentType string, data io.Reader, size int64) (string, error) {
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
@@ -132,7 +141,7 @@ func (s *yandexS3Storage) putObject(ctx context.Context, key, contentType string
 		return "", fmt.Errorf("storage: upload failed: %w", err)
 	}
 
-	return s.publicURL + "/" + key, nil
+	return s.PublicURL(key), nil
 }
 
 func (s *yandexS3Storage) ListKeys(ctx context.Context, prefix string) ([]string, error) {
@@ -158,9 +167,39 @@ func (s *yandexS3Storage) ListKeys(ctx context.Context, prefix string) ([]string
 	return keys, nil
 }
 
-// ArticleKey accepts only the canonical URL emitted by this storage instance.
-// Escapes, query strings, fragments and path normalization are intentionally rejected.
+// ArticleKey resolves only URLs in the configured bucket. Query strings,
+// fragments and unsafe escaped path segments are rejected.
 func (s *yandexS3Storage) ArticleKey(raw string) (string, error) {
+	// The same Lithoteka bucket has both Yandex path-style and virtual-hosted
+	// public URLs. Resolve either spelling to this configured bucket only.
+	if s.bucket == "lithoteka-cdn" {
+		u, err := url.Parse(raw)
+		if err == nil && u.Scheme == "https" && u.User == nil && u.RawQuery == "" && u.Fragment == "" && u.Port() == "" {
+			escapedKey := ""
+			switch u.Hostname() {
+			case "lithoteka-cdn.storage.yandexcloud.net":
+				escapedKey = strings.TrimPrefix(u.EscapedPath(), "/")
+			case "storage.yandexcloud.net":
+				escapedKey = strings.TrimPrefix(u.EscapedPath(), "/lithoteka-cdn/")
+				if escapedKey == u.EscapedPath() {
+					escapedKey = ""
+				}
+			}
+			parts := strings.Split(escapedKey, "/")
+			for i, part := range parts {
+				decoded, err := url.PathUnescape(part)
+				if err != nil || decoded == "" || decoded == "." || decoded == ".." || strings.ContainsAny(decoded, "/\\") {
+					parts = nil
+					break
+				}
+				parts[i] = decoded
+			}
+			key := strings.Join(parts, "/")
+			if safeImagePath(key) && path.Clean(key) == key && raw == "https://"+u.Host+u.EscapedPath() {
+				return key, nil
+			}
+		}
+	}
 	base, err := url.Parse(s.publicURL)
 	if err != nil || base.Scheme != "https" || base.Host == "" || base.RawQuery != "" || base.Fragment != "" || base.User != nil {
 		return "", ErrInvalidArticleURL
@@ -186,6 +225,9 @@ func (s *yandexS3Storage) ReadObject(ctx context.Context, key string, maxBytes i
 		var apiErr smithy.APIError
 		if errors.As(err, &apiErr) && (apiErr.ErrorCode() == "NoSuchKey" || apiErr.ErrorCode() == "NotFound") {
 			return nil, ErrObjectNotFound
+		}
+		if errors.As(err, &apiErr) && (apiErr.ErrorCode() == "AccessDenied" || apiErr.ErrorCode() == "Forbidden") {
+			return nil, fmt.Errorf("storage: read object: %w", ErrObjectAccessDenied)
 		}
 		return nil, fmt.Errorf("storage: read object: %w", err)
 	}

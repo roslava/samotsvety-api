@@ -315,6 +315,20 @@ func TestArticleV2PartialUpdateReorderAndClear(t *testing.T) {
 	}
 }
 
+func TestArticleV2CDNSlideSource(t *testing.T) {
+	router := postRouter(t, newTestPostRepo(), verifiedSlides{})
+	payload := strings.Replace(fullPayload(), `"url":"https://cdn.example/one.webp"`, `"url":"https://cdn.example/illustrations/one.webp","source":"cdn"`, 1)
+	created := postCall(router, "POST", "/api/v1/posts", payload, "test-key", "")
+	assertStatus(t, created, 201)
+	slides := responseJSON(t, created)["i18n"].(map[string]any)["media"].(map[string]any)["slides"].([]any)
+	if slides[0].(map[string]any)["source"] != "cdn" {
+		t.Fatal("CDN source was not persisted")
+	}
+	invalid := strings.Replace(payload, `"source":"cdn"`, `"source":"external"`, 1)
+	rejected := postCall(postRouter(t, newTestPostRepo(), verifiedSlides{}), "POST", "/api/v1/posts", invalid, "test-key", "")
+	assertStatus(t, rejected, 400)
+}
+
 func TestArticleV2ManagedVersionAndETag(t *testing.T) {
 	repo := newTestPostRepo()
 	router := postRouter(t, repo, verifiedSlides{})

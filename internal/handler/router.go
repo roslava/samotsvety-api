@@ -23,7 +23,7 @@ func NewRouter(mineralRepo repository.MineralRepository, postRepo repository.Pos
 		articleVerifier = NewArticleMediaVerifier(articleStorage)
 	}
 	postHandler := NewPostHandler(postRepo, articleVerifier)
-	mediaHandler := NewMediaHandler(mediaStorage)
+	mediaHandler := NewMediaHandler(mediaStorage, postRepo)
 
 	// API v1
 	v1 := router.Group("/api/v1")
@@ -48,6 +48,7 @@ func NewRouter(mineralRepo repository.MineralRepository, postRepo repository.Pos
 		// === Посты / Статьи ===
 		posts := v1.Group("/posts")
 		{
+			posts.GET("/:slug/cover-frames", mediaHandler.ListArticleCover)
 			// Публичные методы (чтение)
 			posts.GET("", postHandler.ListPosts)
 			posts.GET("/:slug", postHandler.GetPost)

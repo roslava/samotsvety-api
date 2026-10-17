@@ -189,7 +189,8 @@ ADMIN_API_KEY=super-secret-key
 
 # Для Yandex Object Storage (опционально)
 YC_S3_ENDPOINT=https://storage.yandexcloud.net
-YC_S3_BUCKET=samotsvety-images
+YC_S3_BUCKET=lithoteka-cdn
+YC_S3_PUBLIC_URL=https://storage.yandexcloud.net/lithoteka-cdn
 YC_S3_ACCESS_KEY=...
 YC_S3_SECRET_KEY=...
 ```

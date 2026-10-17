@@ -95,10 +95,19 @@ type PostI18n struct {
 }
 
 type PostMedia struct {
-	SchemaVersion   int         `json:"schema_version"`
-	Revision        string      `json:"revision,omitempty"`
-	Slides          []PostSlide `json:"slides"`
-	AuthorAvatarURL string      `json:"author_avatar_url,omitempty"`
+	SchemaVersion   int          `json:"schema_version"`
+	Revision        string       `json:"revision,omitempty"`
+	Slides          []PostSlide  `json:"slides"`
+	AuthorAvatarURL string       `json:"author_avatar_url,omitempty"`
+	CoverFrames     *CoverFrames `json:"cover_frames,omitempty"`
+}
+
+// nil CoverFrames preserves legacy S3 discovery; an explicit object with empty
+// slices disables it. The arrays are ordered references, not owned files.
+type CoverFrames struct {
+	Default []string `json:"default"`
+	Ru      []string `json:"ru"`
+	En      []string `json:"en"`
 }
 
 type LocalizedText struct {
@@ -109,6 +118,7 @@ type LocalizedText struct {
 type PostSlide struct {
 	ID      string        `json:"id"`
 	URL     string        `json:"url"`
+	Source  string        `json:"source,omitempty"`
 	Caption LocalizedText `json:"caption,omitempty"`
 	Alt     LocalizedText `json:"alt"`
 }

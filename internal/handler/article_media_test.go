@@ -29,6 +29,7 @@ import (
 type articleMediaStore struct {
 	objects map[string][]byte
 	readErr error
+	listErr error
 }
 
 func (s *articleMediaStore) Upload(ctx context.Context, folder, filename, contentType string, data io.Reader, size int64) (string, error) {
@@ -47,13 +48,25 @@ func (s *articleMediaStore) UploadAt(_ context.Context, key, _ string, data io.R
 }
 func (s *articleMediaStore) UploadUnique(ctx context.Context, key, contentType string, data io.Reader, size int64) (string, error) {
 	if _, exists := s.objects[key]; exists {
-		return "", errors.New("object already exists")
+		return "", storage.ErrObjectExists
 	}
 	return s.UploadAt(ctx, key, contentType, data, size)
 }
-func (s *articleMediaStore) ListKeys(context.Context, string) ([]string, error) { return nil, nil }
+func (s *articleMediaStore) PublicURL(key string) string { return "https://cdn.example/" + key }
+func (s *articleMediaStore) ListKeys(_ context.Context, prefix string) ([]string, error) {
+	if s.listErr != nil {
+		return nil, s.listErr
+	}
+	var keys []string
+	for key := range s.objects {
+		if strings.HasPrefix(key, prefix) {
+			keys = append(keys, key)
+		}
+	}
+	return keys, nil
+}
 func (s *articleMediaStore) ArticleKey(raw string) (string, error) {
-	if !strings.HasPrefix(raw, "https://cdn.example/articles/") || strings.ContainsAny(raw, "%?\\#") {
+	if !strings.HasPrefix(raw, "https://cdn.example/") || strings.ContainsAny(raw, "%?\\#") {
 		return "", storage.ErrInvalidArticleURL
 	}
 	return strings.TrimPrefix(raw, "https://cdn.example/"), nil
@@ -139,10 +152,31 @@ func TestArticleMediaUploadAndVerification(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.objects[key] = badRatio
+	if err := v.VerifySlide(context.Background(), "one-question", domain.PostSlide{ID: id, URL: result.URL}); err != nil {
+		t.Fatalf("4:3 slide: %v", err)
+	}
+	s.objects[key] = []byte("not a WebP")
 	if err := v.VerifySlide(context.Background(), "one-question", domain.PostSlide{ID: id, URL: result.URL}); !errors.Is(err, ErrInvalidArticleMedia) {
-		t.Fatalf("tampered ratio: %v", err)
+		t.Fatalf("invalid WebP: %v", err)
 	}
 	s.objects[key] = goodObject
+	// A pre-existing image in the configured CDN can be selected without uploading it.
+	cdnKey := "illustrations/existing.webp"
+	s.objects[cdnKey] = goodObject
+	if err := v.VerifySlide(context.Background(), "one-question", domain.PostSlide{ID: id, URL: "https://cdn.example/" + cdnKey, Source: "cdn"}); err != nil {
+		t.Fatalf("existing CDN image: %v", err)
+	}
+	s.objects[cdnKey] = badRatio
+	if err := v.VerifySlide(context.Background(), "one-question", domain.PostSlide{ID: id, URL: "https://cdn.example/" + cdnKey, Source: "cdn"}); err != nil {
+		t.Fatalf("4:3 CDN image: %v", err)
+	}
+	s.objects[cdnKey] = goodObject
+	if err := v.VerifySlide(context.Background(), "one-question", domain.PostSlide{ID: id, URL: "https://evil.example/" + cdnKey, Source: "cdn"}); !errors.Is(err, ErrInvalidArticleMediaURL) {
+		t.Fatalf("external CDN URL: %v", err)
+	}
+	if err := v.VerifySlide(context.Background(), "one-question", domain.PostSlide{ID: id, URL: "https://cdn.example/" + cdnKey}); !errors.Is(err, ErrInvalidArticleMedia) {
+		t.Fatalf("unmarked CDN image: %v", err)
+	}
 	for _, tc := range []struct {
 		name, url, slug, id string
 		readErr             error
@@ -160,7 +194,7 @@ func TestArticleMediaUploadAndVerification(t *testing.T) {
 				if !errors.Is(err, ErrMediaVerificationUnavailable) {
 					t.Fatalf("got %v", err)
 				}
-			} else if !errors.Is(err, ErrInvalidArticleMedia) {
+			} else if !errors.Is(err, ErrInvalidArticleMedia) && !errors.Is(err, ErrInvalidArticleMediaURL) {
 				t.Fatalf("got %v", err)
 			}
 		})
@@ -168,8 +202,17 @@ func TestArticleMediaUploadAndVerification(t *testing.T) {
 	s.readErr = nil
 	for _, dims := range [][2]int{{120, 90}, {90, 160}} {
 		resp := uploadArticleMedia(t, r, "article_slide", pngImage(t, dims[0], dims[1]), "one-question", id, true)
-		if resp.Code != 400 || !strings.Contains(resp.Body.String(), "invalid_aspect_ratio") {
+		if resp.Code != 201 {
 			t.Fatalf("ratio %v: %d %s", dims, resp.Code, resp.Body.String())
+		}
+		var uploaded struct {
+			URL string `json:"url"`
+		}
+		if err := json.Unmarshal(resp.Body.Bytes(), &uploaded); err != nil {
+			t.Fatal(err)
+		}
+		if err := v.VerifySlide(context.Background(), "one-question", domain.PostSlide{ID: id, URL: uploaded.URL}); err != nil {
+			t.Fatalf("uploaded ratio %v: %v", dims, err)
 		}
 	}
 	if resp := uploadArticleMedia(t, r, "article_slide", []byte("not an image"), "one-question", id, true); resp.Code != 400 {
@@ -194,14 +237,78 @@ func TestArticleMediaUploadAndVerification(t *testing.T) {
 	if err := v.VerifyAvatar(context.Background(), "one-question", avatarResult.URL); err != nil {
 		t.Fatal(err)
 	}
-	if err := v.VerifyAvatar(context.Background(), "another", avatarResult.URL); !errors.Is(err, ErrInvalidArticleMedia) {
-		t.Fatalf("avatar slug: %v", err)
+	if err := v.VerifyAvatar(context.Background(), "another", avatarResult.URL); err != nil {
+		t.Fatalf("avatar after article rename: %v", err)
 	}
+	if err := v.VerifyAvatar(context.Background(), "another", strings.Replace(avatarResult.URL, "/authors/", "/slides/", 1)); !errors.Is(err, ErrArticleMediaMissing) {
+		t.Fatalf("invalid avatar path: %v", err)
+	}
+	for _, cdnKey := range []string{
+		"common_images/authors/editor.webp",
+		"entities/bruneau_jasper/images/hero.webp",
+		"articles/other/images/cover/01.webp",
+		"articles/other/images/content/photo.webp",
+	} {
+		s.objects[cdnKey] = goodObject
+		if err := v.VerifyAvatar(context.Background(), "one-question", s.PublicURL(cdnKey)); err != nil {
+			t.Fatalf("existing avatar %s: %v", cdnKey, err)
+		}
+		if err := v.VerifySlide(context.Background(), "one-question", domain.PostSlide{ID: id, URL: s.PublicURL(cdnKey), Source: "cdn"}); err != nil {
+			t.Fatalf("existing slide %s: %v", cdnKey, err)
+		}
+	}
+	if err := v.VerifyAvatar(context.Background(), "one-question", "https://evil.example/common_images/authors/editor.webp"); !errors.Is(err, ErrInvalidArticleMediaURL) {
+		t.Fatalf("foreign URL: %v", err)
+	}
+	if err := v.VerifyAvatar(context.Background(), "one-question", "https://cdn.example/common_images/missing.webp"); !errors.Is(err, ErrArticleMediaMissing) {
+		t.Fatalf("missing object: %v", err)
+	}
+	if err := v.VerifySlide(context.Background(), "one-question", domain.PostSlide{ID: id, URL: "https://cdn.example/common_images/missing.webp", Source: "cdn"}); !errors.Is(err, ErrArticleMediaMissing) {
+		t.Fatalf("missing slide: %v", err)
+	}
+	s.readErr = storage.ErrObjectAccessDenied
+	if err := v.VerifyAvatar(context.Background(), "one-question", s.PublicURL("common_images/authors/editor.webp")); !errors.Is(err, ErrMediaVerificationUnavailable) || !errors.Is(err, storage.ErrObjectAccessDenied) {
+		t.Fatalf("access denied: %v", err)
+	}
+	s.readErr = nil
 	for _, data := range s.objects {
 		if _, _, err := imaging.WebPDimensions(data); err != nil {
 			t.Fatalf("stored invalid webp: %v", err)
 		}
 	}
+}
+
+func TestArticleAvatarFromExistingCDNObject(t *testing.T) {
+	key := "common_images/authors/editor.png"
+	s := &articleMediaStore{objects: map[string][]byte{key: pngImage(t, 80, 120)}}
+	r := postRouter(t, newTestPostRepo(), NewArticleMediaVerifier(s))
+	create := func(rawURL string) *httptest.ResponseRecorder {
+		body, _ := json.Marshal(map[string]any{
+			"slug": "one-question",
+			"i18n": map[string]any{"ru": map[string]any{}, "en": map[string]any{}, "media": map[string]any{
+				"slides": []any{}, "author_avatar_url": rawURL,
+			}},
+		})
+		return postCall(r, http.MethodPost, "/api/v1/posts", string(body), "test-key", "")
+	}
+	missing := create(s.PublicURL("common_images/authors/missing.png"))
+	if missing.Code != http.StatusBadRequest || !strings.Contains(missing.Body.String(), "media object not found") {
+		t.Fatalf("missing: %d %s", missing.Code, missing.Body.String())
+	}
+	foreign := create("https://evil.example/" + key)
+	if foreign.Code != http.StatusBadRequest || !strings.Contains(foreign.Body.String(), "invalid Lithoteka CDN URL") {
+		t.Fatalf("foreign: %d %s", foreign.Code, foreign.Body.String())
+	}
+	s.readErr = storage.ErrObjectAccessDenied
+	denied := create(s.PublicURL(key))
+	if denied.Code != http.StatusServiceUnavailable || !strings.Contains(denied.Body.String(), "media_verification_unavailable") {
+		t.Fatalf("access denied: %d %s", denied.Code, denied.Body.String())
+	}
+	s.readErr = nil
+	created := create(s.PublicURL(key))
+	assertStatus(t, created, http.StatusCreated)
+	updated := postCall(r, http.MethodPut, "/api/v1/posts/one-question", `{"i18n":{"ru":{"title":"Кварц"}}}`, "test-key", created.Header().Get("ETag"))
+	assertStatus(t, updated, http.StatusOK)
 }
 
 func TestPublishedArticleUsesStoredSlide(t *testing.T) {
@@ -220,12 +327,22 @@ func TestPublishedArticleUsesStoredSlide(t *testing.T) {
 	if err := json.Unmarshal(upload.Body.Bytes(), &media); err != nil {
 		t.Fatal(err)
 	}
+	avatar := uploadArticleMedia(t, r, "author_avatar", pngImage(t, 80, 120), "one-question", "", true)
+	if avatar.Code != 201 {
+		t.Fatalf("avatar upload: %d %s", avatar.Code, avatar.Body.String())
+	}
+	var avatarMedia struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(avatar.Body.Bytes(), &avatarMedia); err != nil {
+		t.Fatal(err)
+	}
 	post := map[string]any{
 		"slug": "one-question", "author": "Автор", "is_published": true,
 		"i18n": map[string]any{
 			"ru":    map[string]string{"title": "Вопрос", "excerpt": "Лид", "content": "**Ответ**"},
 			"en":    map[string]string{"title": "Question", "excerpt": "Lead", "content": "**Answer**"},
-			"media": map[string]any{"slides": []any{map[string]any{"id": id, "url": media.URL, "alt": map[string]string{"ru": "Фото", "en": "Photo"}}}},
+			"media": map[string]any{"slides": []any{map[string]any{"id": id, "url": media.URL, "alt": map[string]string{"ru": "Фото", "en": "Photo"}}}, "author_avatar_url": avatarMedia.URL},
 		},
 	}
 	encoded, _ := json.Marshal(post)
@@ -234,12 +351,16 @@ func TestPublishedArticleUsesStoredSlide(t *testing.T) {
 	assertStatus(t, created, 201)
 	key, _ := s.ArticleKey(media.URL)
 	stored := s.objects[key]
-	s.objects[key], _ = imaging.ToWebP(context.Background(), pngImage(t, 120, 90), webpQuality)
+	s.objects[key] = []byte("not a WebP")
 	update := postCall(posts, "PUT", "/api/v1/posts/one-question", `{"i18n":{"en":{"title":"Updated"}}}`, "test-key", created.Header().Get("ETag"))
 	if update.Code != 400 {
 		t.Fatalf("published update must reverify all slides: %d %s", update.Code, update.Body.String())
 	}
 	s.objects[key] = stored
+	rename := postCall(posts, "PUT", "/api/v1/posts/one-question", `{"slug":"renamed-question","i18n":{"media":{"slides":[{"id":"`+id+`","url":"`+media.URL+`","source":"cdn","alt":{"ru":"Фото","en":"Photo"}}]}}}`, "test-key", created.Header().Get("ETag"))
+	if rename.Code != 200 {
+		t.Fatalf("rename with existing media: %d %s", rename.Code, rename.Body.String())
+	}
 	post["slug"] = "another"
 	encoded, _ = json.Marshal(post)
 	bad := postCall(posts, "POST", "/api/v1/posts", string(encoded), "test-key", "")

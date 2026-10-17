@@ -12,12 +12,14 @@ import (
 	"mime/multipart"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/roslava/samotsvety-api/internal/imaging"
+	"github.com/roslava/samotsvety-api/internal/repository"
 	"github.com/roslava/samotsvety-api/internal/storage"
 )
 
@@ -44,7 +46,7 @@ var slugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 // galleryNamePattern вытаскивает числовой суффикс из имени файла галереи вида
 // "ruby07.webp" -> 7, чтобы определить следующий свободный номер.
-var galleryNamePattern = regexp.MustCompile(`(\d+)\.webp$`)
+var galleryNamePattern = regexp.MustCompile(`^(\d+)\.webp$`)
 
 // allowedLangs — допустимые значения поля "lang" для картинок с языковым
 // оверрайдом (диаграммы/схемы с текстом внутри изображения).
@@ -52,23 +54,28 @@ var allowedLangs = map[string]bool{"": true, "ru": true, "en": true}
 
 type MediaHandler struct {
 	storage storage.MediaStorage
+	posts   repository.PostRepository
 }
 
-func NewMediaHandler(s storage.MediaStorage) *MediaHandler {
-	return &MediaHandler{storage: s}
+func NewMediaHandler(s storage.MediaStorage, posts ...repository.PostRepository) *MediaHandler {
+	h := &MediaHandler{storage: s}
+	if len(posts) > 0 {
+		h.posts = posts[0]
+	}
+	return h
 }
 
 // UploadMedia godoc
 // @Summary      Загрузить изображение
 // @Description  Принимает multipart-файл (jpeg/png/webp/gif, до 10 МБ) и поле "kind":
-// @Description    - "hero"        — минерал, требует "slug", сохраняется как <slug>/hero.webp
-// @Description    - "thumbnail"   — минерал, требует "slug", сохраняется как <slug>/thumbnail.webp
-// @Description    - "gallery"     — минерал, требует "slug", сохраняется как <slug>/gallery/<slug><NN>.webp
+// @Description    - "hero"        — сущность, требует "slug", сохраняется как entities/<storage_key>/images/hero.webp
+// @Description    - "thumbnail"   — сущность, требует "slug", сохраняется как entities/<storage_key>/images/thumbnail.webp
+// @Description    - "gallery"     — сущность, требует "slug", сохраняется как entities/<storage_key>/images/gallery/<storage_key><NN>.webp
 // @Description                      (номер вычисляется автоматически)
 // @Description    - "cover"       — обложка статьи, требует "slug" (+ опц. "lang" ru/en),
-// @Description                      сохраняется как articles/<slug>/cover.webp или cover-<lang>.webp
+// @Description                      добавляет следующий кадр в articles/<slug>/images/cover/[<lang>/]<NN>.webp
 // @Description    - "block_image" — картинка в блоке статьи, требует "slug" и "block_index"
-// @Description                      (+ опц. "lang"), сохраняется как articles/<slug>/image-<NN>.webp
+// @Description                      (+ опц. "lang"), сохраняется как articles/<slug>/images/content/image-<NN>.webp
 // @Description                      или image-<NN>-<lang>.webp
 // @Description    - "block_pair"  — картинка в блоке-паре статьи, требует "slug", "block_index"
 // @Description                      и "pair_index" (1|2) (+ опц. "lang"), сохраняется как
@@ -80,6 +87,7 @@ func NewMediaHandler(s storage.MediaStorage) *MediaHandler {
 // @Param        file         formData  file    true   "Файл изображения"
 // @Param        kind         formData  string  true   "hero | thumbnail | gallery | cover | block_image | block_pair | article_slide | author_avatar"
 // @Param        slug         formData  string  true   "Slug минерала или статьи"
+// @Param        storage_key  formData  string  false  "Ключ хранилища сущности (если отличается от slug)"
 // @Param        slide_id     formData  string  false  "UUID слайда (для article_slide)"
 // @Param        block_index  formData  int     false  "Порядковый номер блока в статье (для block_image/block_pair)"
 // @Param        pair_index   formData  int     false  "1 или 2 — какая картинка в паре (для block_pair)"
@@ -133,7 +141,7 @@ func (h *MediaHandler) UploadMedia(c *gin.Context) {
 
 	switch kind {
 	case "hero", "thumbnail", "gallery":
-		h.uploadMineralImage(c, kind, slug, file, fileHeader)
+		h.uploadMineralImage(c, kind, slug, strings.TrimSpace(c.PostForm("storage_key")), file, fileHeader)
 	case "cover", "block_image", "block_pair":
 		h.uploadArticleImage(c, kind, slug, lang, file, fileHeader)
 	case "article_slide", "author_avatar":
@@ -172,10 +180,6 @@ func (h *MediaHandler) uploadArticleV2Image(c *gin.Context, kind, slug, slideID 
 		NewErrorResponse(c, http.StatusBadRequest, "validation_error", "invalid image")
 		return
 	}
-	if kind == "article_slide" && !imaging.IsSixteenNine(w, height) {
-		NewErrorResponse(c, http.StatusBadRequest, "invalid_aspect_ratio", "slide must be exactly 16:9")
-		return
-	}
 	webpBytes, err := imaging.ToWebP(c.Request.Context(), prepared, webpQuality)
 	if err != nil {
 		if errors.Is(err, imaging.ErrConverterUnavailable) {
@@ -194,8 +198,8 @@ func (h *MediaHandler) uploadArticleV2Image(c *gin.Context, kind, slug, slideID 
 		NewErrorResponse(c, http.StatusBadRequest, "validation_error", "converted image is too large")
 		return
 	}
-	if outW != w || outH != height || (kind == "article_slide" && !imaging.IsSixteenNine(outW, outH)) {
-		NewErrorResponse(c, http.StatusBadRequest, "invalid_aspect_ratio", "converted image dimensions differ from input")
+	if outW != w || outH != height {
+		NewErrorResponse(c, http.StatusBadRequest, "invalid_image_dimensions", "converted image dimensions differ from input")
 		return
 	}
 	random := make([]byte, 16)
@@ -205,9 +209,9 @@ func (h *MediaHandler) uploadArticleV2Image(c *gin.Context, kind, slug, slideID 
 	}
 	var key string
 	if kind == "article_slide" {
-		key = fmt.Sprintf("articles/%s/slides/%s/%s.webp", slug, slideID, hex.EncodeToString(random))
+		key, _ = storage.ArticleContentKey(slug, fmt.Sprintf("slides/%s/%s.webp", slideID, hex.EncodeToString(random)))
 	} else {
-		key = fmt.Sprintf("articles/%s/authors/%s.webp", slug, hex.EncodeToString(random))
+		key, _ = storage.ArticleContentKey(slug, fmt.Sprintf("authors/%s.webp", hex.EncodeToString(random)))
 	}
 	articleStorage, ok := h.storage.(storage.ArticleMediaStorage)
 	if !ok {
@@ -225,12 +229,9 @@ func (h *MediaHandler) uploadArticleV2Image(c *gin.Context, kind, slug, slideID 
 
 // uploadArticleImage реализует структуру бакета для статей:
 //
-//	articles/<slug>/cover.webp                — kind=cover, без lang
-//	articles/<slug>/cover-<lang>.webp         — kind=cover, с lang (ru/en)
-//	articles/<slug>/image-<NN>.webp           — kind=block_image, без lang
-//	articles/<slug>/image-<NN>-<lang>.webp    — kind=block_image, с lang
-//	articles/<slug>/image-<NN>-<P>.webp       — kind=block_pair (P = pair_index 1|2), без lang
-//	articles/<slug>/image-<NN>-<P>-<lang>.webp — kind=block_pair, с lang
+//	articles/<slug>/images/cover/[<lang>/]<NN>.webp — kind=cover
+//	articles/<slug>/images/content/image-<NN>.webp — kind=block_image
+//	articles/<slug>/images/content/image-<NN>-<P>-<lang>.webp — kind=block_pair
 //
 // NN — порядковый номер блока в статье (поле "block_index" из формы, 1-based).
 // Изображение всегда конвертируется в WebP независимо от исходного формата.
@@ -283,11 +284,37 @@ func (h *MediaHandler) uploadArticleImage(c *gin.Context, kind, slug, lang strin
 	var key string
 	switch kind {
 	case "cover":
-		key = fmt.Sprintf("articles/%s/cover%s.webp", slug, langSuffix)
+		articleStorage, ok := h.storage.(storage.ArticleMediaStorage)
+		if !ok {
+			RespondWithError(c, http.StatusServiceUnavailable, "Хранилище кадров обложки не настроено")
+			return
+		}
+		prefix, _ := storage.ArticleCoverPrefix(slug, lang)
+		for attempt := 0; attempt < 32; attempt++ {
+			keys, err := h.storage.ListKeys(c.Request.Context(), prefix)
+			if err != nil {
+				RespondInternalError(c, "Не удалось получить кадры обложки")
+				return
+			}
+			index := nextNumber(keys, prefix, galleryNamePattern)
+			key, _ = storage.ArticleCoverKey(slug, lang, index)
+			url, err := articleStorage.UploadUnique(c.Request.Context(), key, "image/webp", bytes.NewReader(webpBytes), int64(len(webpBytes)))
+			if errors.Is(err, storage.ErrObjectExists) {
+				continue
+			}
+			if err != nil {
+				RespondInternalError(c, "Не удалось загрузить кадр обложки")
+				return
+			}
+			c.JSON(http.StatusCreated, gin.H{"url": url, "index": index})
+			return
+		}
+		RespondWithError(c, http.StatusConflict, "Одновременные загрузки кадров конфликтуют; повторите запрос")
+		return
 	case "block_image":
-		key = fmt.Sprintf("articles/%s/image-%02d%s.webp", slug, blockIndex, langSuffix)
+		key, _ = storage.ArticleContentKey(slug, fmt.Sprintf("image-%02d%s.webp", blockIndex, langSuffix))
 	case "block_pair":
-		key = fmt.Sprintf("articles/%s/image-%02d-%d%s.webp", slug, blockIndex, pairIndex, langSuffix)
+		key, _ = storage.ArticleContentKey(slug, fmt.Sprintf("image-%02d-%d%s.webp", blockIndex, pairIndex, langSuffix))
 	}
 
 	url, err := h.storage.UploadAt(c.Request.Context(), key, "image/webp", bytes.NewReader(webpBytes), int64(len(webpBytes)))
@@ -302,18 +329,27 @@ func (h *MediaHandler) uploadArticleImage(c *gin.Context, kind, slug, lang strin
 
 // uploadMineralImage реализует структуру бакета для минералов:
 //
-//	<slug>/hero.webp
-//	<slug>/thumbnail.webp
-//	<slug>/gallery/<slug><NN>.webp
+//	entities/<storage_key>/images/hero.webp
+//	entities/<storage_key>/images/thumbnail.webp
+//	entities/<storage_key>/images/gallery/<storage_key><NN>.webp
 //
 // Изображение всегда конвертируется в WebP независимо от исходного формата.
-func (h *MediaHandler) uploadMineralImage(c *gin.Context, kind, slug string, file io.Reader, fileHeader *multipart.FileHeader) {
+func (h *MediaHandler) uploadMineralImage(c *gin.Context, kind, slug, storageKey string, file io.Reader, fileHeader *multipart.FileHeader) {
 	if slug == "" {
 		RespondWithError(c, http.StatusBadRequest, "Для изображений минерала обязательно поле \"slug\" — сначала укажите slug в форме минерала")
 		return
 	}
 	if !slugPattern.MatchString(slug) {
 		RespondWithError(c, http.StatusBadRequest, "Некорректный slug: разрешены строчные латинские буквы, цифры и дефис")
+		return
+	}
+	// Existing callers can omit storage_key when it equals slug. For V2 entities
+	// with a different folder, the caller supplies the persisted storage_key.
+	if storageKey == "" {
+		storageKey = slug
+	}
+	if _, err := storage.EntityImageKey(storageKey, "hero.webp"); err != nil {
+		RespondWithError(c, http.StatusBadRequest, "Некорректный storage_key")
 		return
 	}
 
@@ -333,17 +369,35 @@ func (h *MediaHandler) uploadMineralImage(c *gin.Context, kind, slug string, fil
 	var key string
 	switch kind {
 	case "hero":
-		key = fmt.Sprintf("%s/hero.webp", slug)
+		key, _ = storage.EntityImageKey(storageKey, "hero.webp")
 	case "thumbnail":
-		key = fmt.Sprintf("%s/thumbnail.webp", slug)
+		key, _ = storage.EntityImageKey(storageKey, "thumbnail.webp")
 	case "gallery":
-		nextKey, err := h.nextGalleryKey(c, slug)
-		if err != nil {
-			slog.Error("Failed to determine next gallery filename", "error", err, "slug", slug)
-			RespondInternalError(c, "Не удалось определить имя файла для галереи")
+		unique, ok := h.storage.(storage.ArticleMediaStorage)
+		if !ok {
+			RespondWithError(c, http.StatusServiceUnavailable, "Безопасная загрузка галереи не настроена")
 			return
 		}
-		key = nextKey
+		for attempt := 0; attempt < 32; attempt++ {
+			var err error
+			key, err = h.nextGalleryKey(c, storageKey)
+			if err != nil {
+				RespondInternalError(c, "Не удалось определить имя файла для галереи")
+				return
+			}
+			url, err := unique.UploadUnique(c.Request.Context(), key, "image/webp", bytes.NewReader(webpBytes), int64(len(webpBytes)))
+			if errors.Is(err, storage.ErrObjectExists) {
+				continue
+			}
+			if err != nil {
+				RespondInternalError(c, "Не удалось загрузить файл")
+				return
+			}
+			c.JSON(http.StatusCreated, gin.H{"url": url})
+			return
+		}
+		RespondWithError(c, http.StatusConflict, "Одновременные загрузки галереи конфликтуют; повторите запрос")
+		return
 	}
 
 	url, err := h.storage.UploadAt(c.Request.Context(), key, "image/webp", bytes.NewReader(webpBytes), int64(len(webpBytes)))
@@ -356,37 +410,154 @@ func (h *MediaHandler) uploadMineralImage(c *gin.Context, kind, slug string, fil
 	c.JSON(http.StatusCreated, gin.H{"url": url})
 }
 
-// nextGalleryKey вычисляет следующий свободный ключ вида "<slug>/gallery/<slug><NN>.webp",
+// nextGalleryKey вычисляет следующий свободный ключ галереи сущности,
 // глядя на уже загруженные файлы в этой папке. Нумерация всегда двузначная (01, 02, ...),
 // расширяется до трёх цифр сама, если файлов набирается больше 99.
-func (h *MediaHandler) nextGalleryKey(c *gin.Context, slug string) (string, error) {
-	prefix := fmt.Sprintf("%s/gallery/", slug)
+func (h *MediaHandler) nextGalleryKey(c *gin.Context, storageKey string) (string, error) {
+	prefix, err := storage.EntityGalleryPrefix(storageKey)
+	if err != nil {
+		return "", err
+	}
 
 	keys, err := h.storage.ListKeys(c.Request.Context(), prefix)
 	if err != nil {
 		return "", err
 	}
 
-	maxN := 0
-	for _, key := range keys {
-		matches := galleryNamePattern.FindStringSubmatch(key)
-		if len(matches) != 2 {
-			continue
-		}
-		n, err := strconv.Atoi(matches[1])
-		if err != nil {
-			continue
-		}
-		if n > maxN {
-			maxN = n
-		}
-	}
-
-	next := maxN + 1
+	next := nextNumber(keys, prefix+storageKey, regexp.MustCompile(`^(\d+)\.webp$`))
 	numStr := strconv.Itoa(next)
 	if next < 100 {
 		numStr = fmt.Sprintf("%02d", next)
 	}
 
-	return fmt.Sprintf("%s%s%s.webp", prefix, slug, numStr), nil
+	return prefix + storageKey + numStr + ".webp", nil
+}
+
+func nextNumber(keys []string, prefix string, pattern *regexp.Regexp) int {
+	maxIndex := 0
+	for _, key := range keys {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		match := pattern.FindStringSubmatch(strings.TrimPrefix(key, prefix))
+		if len(match) != 2 {
+			continue
+		}
+		n, err := strconv.Atoi(match[1])
+		if err == nil && n > maxIndex {
+			maxIndex = n
+		}
+	}
+	return maxIndex + 1
+}
+
+// ListArticleCover reads stored URL sequences, retaining S3 listing only for
+// articles that have never saved cover_frames.
+func (h *MediaHandler) ListArticleCover(c *gin.Context) {
+	slug, lang := c.Param("slug"), c.Query("lang")
+	if !slugPattern.MatchString(slug) || !allowedLangs[lang] || (c.Query("all") != "" && c.Query("all") != "1") {
+		RespondWithError(c, http.StatusBadRequest, "Некорректный slug или lang")
+		return
+	}
+	var sequences *coverSequences
+	if h.posts != nil {
+		admin, ok := NewPostHandler(h.posts).adminRead(c)
+		if !ok {
+			return
+		}
+		post, err := h.posts.GetBySlug(c.Request.Context(), slug, admin)
+		if err != nil {
+			respondPostError(c, err)
+			return
+		}
+		sequences, err = articleCoverFrames(post)
+		if err != nil {
+			RespondInternalError(c, "Не удалось прочитать кадры статьи")
+			return
+		}
+	}
+	managed := sequences != nil
+	if !managed {
+		s, ok := h.storage.(storage.ArticleMediaStorage)
+		if !ok {
+			RespondWithError(c, http.StatusServiceUnavailable, "Хранилище кадров не настроено")
+			return
+		}
+		sequences = &coverSequences{}
+		var err error
+		if sequences.Default, err = legacyCoverURLs(c, s, slug, ""); err != nil {
+			RespondInternalError(c, "Не удалось получить кадры обложки")
+			return
+		}
+		if lang == "ru" || c.Query("all") == "1" {
+			if sequences.Ru, err = legacyCoverURLs(c, s, slug, "ru"); err != nil {
+				RespondInternalError(c, "Не удалось получить кадры обложки")
+				return
+			}
+		}
+		if lang == "en" || c.Query("all") == "1" {
+			if sequences.En, err = legacyCoverURLs(c, s, slug, "en"); err != nil {
+				RespondInternalError(c, "Не удалось получить кадры обложки")
+				return
+			}
+		}
+	}
+	type frame struct {
+		Index int    `json:"index"`
+		URL   string `json:"url"`
+	}
+	urls := sequences.resolved(lang)
+	frames := make([]frame, 0, len(urls))
+	for i, url := range urls {
+		frames = append(frames, frame{i + 1, url})
+	}
+	response := gin.H{"slug": slug, "lang": lang, "frames": frames}
+	if c.Query("all") == "1" {
+		response["sequences"] = gin.H{"default": nonNilURLs(sequences.Default), "ru": nonNilURLs(sequences.Ru), "en": nonNilURLs(sequences.En)}
+		response["managed"] = managed
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+func nonNilURLs(urls []string) []string {
+	if urls == nil {
+		return []string{}
+	}
+	return urls
+}
+
+func legacyCoverURLs(c *gin.Context, s storage.ArticleMediaStorage, slug, lang string) ([]string, error) {
+	prefix, err := storage.ArticleCoverPrefix(slug, lang)
+	if err != nil {
+		return nil, err
+	}
+	keys, err := s.ListKeys(c.Request.Context(), prefix)
+	if err != nil {
+		return nil, err
+	}
+	type frame struct {
+		Index int
+		URL   string
+	}
+	frames := make([]frame, 0)
+	for _, key := range keys {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		match := galleryNamePattern.FindStringSubmatch(strings.TrimPrefix(key, prefix))
+		if len(match) != 2 {
+			continue
+		}
+		n, err := strconv.Atoi(match[1])
+		if err != nil || n < 1 {
+			continue
+		}
+		frames = append(frames, frame{n, s.PublicURL(key)})
+	}
+	sort.Slice(frames, func(i, j int) bool { return frames[i].Index < frames[j].Index })
+	urls := make([]string, 0, len(frames))
+	for _, item := range frames {
+		urls = append(urls, item.URL)
+	}
+	return urls, nil
 }

@@ -374,7 +374,7 @@ Response: { "url": "https://cdn.samotsvety.com/..." }
     "en": { /* аналогично */ }
   },
   
-  "cover_image": "https://cdn.samotsvety.com/posts/malachite-care/cover.webp",
+  "cover_image": "https://storage.yandexcloud.net/lithoteka-cdn/articles/malachite-care/images/cover/01.webp",
   
   "content_blocks": [
     {
@@ -427,10 +427,10 @@ ADMIN_API_KEY=super-secret-admin-key-change-me
 # Yandex Object Storage (для загрузки медиа)
 YC_S3_ENDPOINT=https://storage.yandexcloud.net
 YC_S3_REGION=ru-central1
-YC_S3_BUCKET=samotsvety-images
+YC_S3_BUCKET=lithoteka-cdn
 YC_S3_ACCESS_KEY=your-access-key
 YC_S3_SECRET_KEY=your-secret-key
-YC_S3_PUBLIC_URL=https://cdn.samotsvety.com
+YC_S3_PUBLIC_URL=https://storage.yandexcloud.net/lithoteka-cdn
 ```
 
 **Примечание:** Если Yandex S3 не настроен, остальной API работает нормально, только эндпоинт загрузки вернёт 503.
@@ -494,21 +494,21 @@ curl "http://localhost:8080/api/v1/filters?lang=ru"
 ### Структура S3 бакета
 
 ```
-samotsvety-images/
-├── minerals/
-│   ├── malachite/
-│   │   ├── hero.webp
-│   │   ├── thumbnail.webp
-│   │   └── gallery/
-│   │       ├── malachite-01.webp
-│   │       └── malachite-02.webp
+lithoteka-cdn/
+├── entities/
+│   └── {storage_key}/images/
+│       ├── hero.webp
+│       ├── thumbnail.webp
+│       ├── gallery/{storage_key}01.webp
+│       └── content/
 │
 └── articles/
     └── {slug}/
-        ├── cover.webp
-        ├── cover-ru.webp (языковые варианты)
-        ├── image-01.webp
-        └── image-02-1-ru.webp (блочные пары)
+        └── images/
+            ├── cover/01.webp
+            ├── cover/ru/01.webp
+            ├── content/image-01.webp
+            └── content/image-02-1-ru.webp
 ```
 
 ### Миграции

@@ -190,5 +190,3 @@ func WebPDimensions(b []byte) (int, int, error) {
 	}
 	return w, h, nil
 }
-
-func IsSixteenNine(w, h int) bool { return w > 0 && h > 0 && int64(w)*9 == int64(h)*16 }
